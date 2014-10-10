@@ -12,7 +12,7 @@ use work.core.all;
 entity cpu_tb is
 end entity cpu_tb;
 
-architecture Simulational of cpu_tb is
+architecture behavioral of cpu_tb is
   constant clk_freq : real := 66.666e6;
   signal simclk : std_logic;
   signal txd : std_logic := '1';
@@ -27,7 +27,7 @@ architecture Simulational of cpu_tb is
   file read_file : text open read_mode is "in.dat";
   file write_file : text open write_mode is "out.dat";
 
-  signal XRST : std_logic := '0';
+  signal rst : std_logic := '0';
 
   signal ZA : std_logic_vector(19 downto 0);
   signal ZCLKMA : std_logic_vector(1 downto 0);
@@ -101,7 +101,7 @@ begin
     clk => simclk,
     RS_TX => txd,
     RS_RX => rxd,
-    XRST => XRST,
+    rst => rst,
     ZA => ZA,
     ZCLKMA => ZCLKMA,
     XZBE => XZBE,
@@ -162,9 +162,9 @@ begin
 
   clockgen: process
   begin
-    XRST <= '0';
+    rst <= '1';
     wait for 1 ns;
-    XRST <= '1';
+    rst <= '0';
     wait for 1 ns;
     clockloop: loop
       simclk <= '0';
@@ -173,4 +173,4 @@ begin
       wait for 0.5 sec / clk_freq;
     end loop clockloop;
   end process;
-end architecture Simulational;
+end architecture behavioral;

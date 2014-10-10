@@ -24,6 +24,6 @@ package core is
       RS_RX : in std_logic; -- RS-232C, input
       -- Clock And Reset
       clk : in std_logic;
-      XRST : in std_logic);
+      rst : in std_logic);
   end component cpu;
 end package core;

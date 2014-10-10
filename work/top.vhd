@@ -7,6 +7,7 @@ use unisim.vcomponents.all;
 
 library work;
 use work.serial.all;
+use work.core.all;
 
 entity top is
   port (
@@ -81,98 +82,33 @@ architecture toplevel of top is
   signal dqsbuf : std_logic_vector(7 downto 0);
   signal ckbuf : std_logic_vector(1 downto 0);
   signal rst : std_logic;
-
-  signal send_busy : std_logic;
-  signal send_data : std_logic_vector(7 downto 0);
-  signal send_go : std_logic := '0';
-  signal recv_busy : std_logic;
-  signal recv_data : std_logic_vector(7 downto 0);
-  signal recv_done : std_logic;
-
-  signal recv_buf : std_logic_vector(7 downto 0);
-  signal recv_buf_e : std_logic := '0';
-
-  signal sram_addr : unsigned(20 downto 0) := (others => '0');
-  signal sram_addr2 : unsigned(20 downto 0) := (others => '0');
-  signal sram_addr3 : unsigned(20 downto 0) := (others => '0');
-  signal sram_addr4 : unsigned(20 downto 0) := (others => '0');
-  signal sram_addr5 : unsigned(20 downto 0) := (others => '0');
-  signal sram_d : unsigned(35 downto 0) := (others => '0');
-  signal sram_wrong_cnt1 : unsigned(7 downto 0) := (others => '0');
-  signal sram_wrong_cnt2 : unsigned(7 downto 0) := (others => '0');
 begin
-  send : process(clk)
-    variable send_go_v : std_logic := '0';
-  begin
-    if rising_edge(clk) then
-      send_go_v := '0';
-
-      -- SRAM process
-      if sram_addr4 = (20 downto 0 => '0') then
-        sram_wrong_cnt2 <= sram_wrong_cnt1;
-        sram_wrong_cnt1 <= (others => '0');
-      end if;
-      if sram_addr5(20) = '1' then
-        if sram_addr5(19 downto 0) < 998765 then
-          if sram_d(19 downto 0) /= sram_addr5(19 downto 0) then
-            sram_wrong_cnt1 <= sram_wrong_cnt1 + 1;
-          end if;
-        end if;
-      end if;
-      sram_d <= unsigned(ZDP & ZD);
-      XWA <= sram_addr(20);
-      ZA <= std_logic_vector(sram_addr(19 downto 0));
-      if sram_addr3(20) = '1' then
-        ZD <= (others => 'Z');
-        ZDP <= (others => 'Z');
-      else
-        ZD(19 downto 0) <= std_logic_vector(sram_addr3(19 downto 0));
-        ZD(31 downto 20) <= (others => '0');
-        ZDP <= (others => '0');
-      end if;
-      sram_addr <= sram_addr + 1;
-      sram_addr2 <= sram_addr;
-      sram_addr3 <= sram_addr2;
-      sram_addr4 <= sram_addr3;
-      sram_addr5 <= sram_addr4;
-
-      -- send
-      if recv_done = '1' and recv_buf_e /= '1' then
-        recv_buf <= recv_data;
-        recv_buf_e <= '1';
-      end if;
-      if send_busy /= '1' and recv_buf_e = '1' then
-        -- send_data <= recv_buf;
-        send_data <= std_logic_vector(sram_wrong_cnt2);
-        send_go_v := '1';
-        recv_buf_e <= '0';
-      end if;
-      send_go <= send_go_v;
-    end if;
-  end process send;
-  uart : rs232c generic map (
-    clk_freq => clk_freq,
-    baudrate => 460800.0,
-    stopbit => 1.0,
-    databit => 8,
-    parity => parity_none,
-    handshaking => handshaking_none)
+  cpu_unit: cpu
   port map (
+    ZD => ZD,
+    ZDP => ZDP,
+    ZA => ZA,
+    XE1 => XE1,
+    E2A => E2A,
+    XE3 => XE3,
+    XZBE => XZBE,
+    XGA => XGA,
+    XWA => XWA,
+    XZCKE => XZCKE,
+    ZCLKMA => ZCLKMA,
+    ADVA => ADVA,
+    XFT => XFT,
+    XLBO => XLBO,
+    ZZA => ZZA,
+    RS_TX => RS_TX,
+    RS_RX => RS_RX,
     clk => clk,
-    txd => RS_TX,
-    rxd => RS_RX,
-    send_busy => send_busy,
-    send_go => send_go,
-    send_data => send_data,
-    recv_busy => recv_busy,
-    recv_done => recv_done,
-    recv_data => recv_data);
-
+    rst => rst);
   ib: IBUFG
   port map (
     i => MCLK1,
     o => imclk);
-  rst <= XRST;
+  rst <= not XRST;
   dcm1 : DCM_ADV
   generic map (
     clkin_period => 1.0e9 / mclk_freq,
@@ -187,7 +123,6 @@ begin
     clkfx => clkbgi,
     clkin => imclk,
     clkfb => clk0,
-    -- rst => rst);
     rst => not XRST);
   bg0 : BUFG
   port map (
@@ -199,7 +134,7 @@ begin
     o => clk);
 
   ckouts : for cki in 0 to 1 generate
-    ckout : OBUFDS -- capacitance, iostandard, slew
+    ckout : OBUFDS
     port map (
       i => ckbuf(cki),
       o => CK(cki),
@@ -207,7 +142,7 @@ begin
   end generate;
 
   dqs_outs : for dqsi in 0 to 7 generate
-    dqs_out : OBUFDS -- capacitance, iostandard, slew
+    dqs_out : OBUFDS
     port map (
       i => dqsbuf(dqsi),
       o => DQS(dqsi),
@@ -226,22 +161,6 @@ begin
   ODT <= (others => '0');
   CKE <= (others => '0');
   ckbuf <= (others => '0'); -- clock off
-
-  XE1 <= '0';
-  E2A <= '1';
-  XE3 <= '0';
-  XGA <= '0';
-  XZCKE <= '0';
-  ZCLKMA <= (others => clk);
-  ADVA <= '0';
-  XLBO <= '1';
-  ZZA <= '0';
-  XFT <= '1';
-  XZBE <= (others => '0');
-  -- ZA <= (others => '0');
-  -- ZD <= (others => 'Z');
-  -- ZDP <= (others => 'Z');
-  -- XWA <= '1';
 
   U_RDY <= (others => '0');
   XU_RYBY <= '1';

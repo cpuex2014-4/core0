@@ -68,7 +68,7 @@ entity rs232c is
     recv_data : out std_logic_vector(7 downto 0));
 end entity rs232c;
 
-architecture RTL of rs232c is
+architecture behavioral of rs232c is
   constant bitcnt : integer := integer(round(clk_freq/baudrate));
   constant stopcnt : integer := integer(floor(clk_freq/baudrate*stopbit*0.99));
   constant startcnt : integer := integer(round(clk_freq/baudrate/6.0));
@@ -198,4 +198,4 @@ begin
       recv_done <= recv_done_v;
     end if;
   end process;
-end architecture RTL;
+end architecture behavioral;

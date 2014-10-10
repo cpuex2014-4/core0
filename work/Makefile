@@ -13,7 +13,9 @@ TESTBENCHES = cpu_tb
 OBJS = $(SOURCES:.vhd=.o)
 
 GHDLC = ghdl
-GHDLFLAGS  = -fexplicit --ieee=synopsys --work=$(LIBRARYNAME) -P../unisim
+GHDLFLAGS = \
+	-fexplicit --ieee=synopsys --work=$(LIBRARYNAME) \
+	#--std=93
 GHDL_SIM_OPT = --stop-time=10ms
 
 .PHONY: all test clean check-syntax $(TESTBENCHES)
