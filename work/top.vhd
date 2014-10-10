@@ -78,6 +78,7 @@ architecture toplevel of top is
   signal imclk : std_logic;
   signal clk0, clk0bgi : std_logic;
   signal clk, clkbgi : std_logic;
+  signal clk_plain : std_logic;
 
   signal dqsbuf : std_logic_vector(7 downto 0);
   signal ckbuf : std_logic_vector(1 downto 0);
@@ -102,7 +103,8 @@ begin
     ZZA => ZZA,
     RS_TX => RS_TX,
     RS_RX => RS_RX,
-    clk => clk,
+    -- clk => clk,
+    clk => clk_plain,
     rst => rst);
   ib: IBUFG
   port map (
@@ -132,6 +134,10 @@ begin
   port map (
     i => clkbgi,
     o => clk);
+  bg2 : BUFG
+  port map (
+    i => imclk,
+    o => clk_plain);
 
   ckouts : for cki in 0 to 1 generate
     ckout : OBUFDS
