@@ -52,7 +52,7 @@ architecture behavioral of cpu is
     array(1023 downto 0) of unsigned(31 downto 0);
   signal instruction_memory : instruction_memory_t;
 
-  signal program_counter : unsigned(31 downto 0) := (others => '0');
+  signal program_counter : unsigned(29 downto 0) := (others => '0');
 
   signal instruction_register : unsigned(31 downto 0);
 
@@ -146,7 +146,7 @@ begin
   end process send_from_fifo;
 
   cpu_sequential_process : process(clk, rst)
-    variable next_program_counter : unsigned(31 downto 0);
+    variable next_program_counter : unsigned(29 downto 0);
     variable next_rd_val : unsigned(31 downto 0);
     variable next_gpr_we : std_logic;
   begin
@@ -166,25 +166,25 @@ begin
             recv_fifo_start <= recv_fifo_start + 4;
             program_counter <= (others => '0');
           else
-            instruction_memory(to_integer(program_counter(11 downto 2)))
+            instruction_memory(to_integer(program_counter(9 downto 0)))
               <= recv_fifo_topword;
             recv_fifo_start <= recv_fifo_start + 4;
-            program_counter <= program_counter + 4;
+            program_counter <= program_counter + 1;
           end if;
         end if;
       when instruction_fetch =>
         instruction_register <=
-          instruction_memory(to_integer(program_counter(11 downto 2)));
+          instruction_memory(to_integer(program_counter(9 downto 0)));
         cpu_state <= execute;
       when execute =>
         cpu_state <= memory_access;
       when memory_access =>
         cpu_state <= writeback;
       when writeback =>
-        next_program_counter := program_counter + 4;
+        next_program_counter := program_counter + 1;
         case instruction_register(31 downto 26) is
         when "000010" =>
-          next_program_counter := "000000" & instruction_register(25 downto 0);
+          next_program_counter := "0000" & instruction_register(25 downto 0);
         when "111111" =>
           next_program_counter := next_program_counter;
           case instruction_register(5 downto 0) is
