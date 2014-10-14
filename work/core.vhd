@@ -3,6 +3,7 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
 package core is
+  subtype unsigned_word is unsigned(31 downto 0);
   component cpu is
     port (
       -- SRAM
@@ -26,4 +27,17 @@ package core is
       clk : in std_logic;
       rst : in std_logic);
   end component cpu;
+
+  component register_file is
+    port (
+      clk : in std_logic;
+      rst : in std_logic;
+      gpr_rd0addr : in unsigned(4 downto 0);
+      gpr_rd0val : out unsigned_word;
+      gpr_rd1addr : in unsigned(4 downto 0);
+      gpr_rd1val : out unsigned_word;
+      gpr_wraddr : in unsigned(4 downto 0);
+      gpr_wrval : in unsigned_word;
+      gpr_we : in std_logic);
+  end component register_file;
 end package core;

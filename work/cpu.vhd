@@ -4,6 +4,7 @@ use ieee.numeric_std.all;
 
 library work;
 use work.serial.all;
+use work.core.all;
 
 entity cpu is
   port (
@@ -39,7 +40,14 @@ architecture behavioral of cpu is
   signal recv_done : std_logic;
   signal recv_data : std_logic_vector(7 downto 0);
 
-  type cpu_state_t is (program_loading, running);
+  type cpu_state_t is (
+    program_loading,
+    running,
+    instruction_fetch,
+    decode,
+    execute,
+    memory_access,
+    writeback);
   signal cpu_state : cpu_state_t := program_loading;
 
   type instruction_memory_t is
@@ -50,12 +58,9 @@ architecture behavioral of cpu is
 
   signal instruction_register : unsigned(31 downto 0);
 
-  type gprs_t is array(31 downto 0) of unsigned(31 downto 0);
-  signal gprs : gprs_t;
-  -- signal rs_val : unsigned(31 downto 0);
-  -- signal rt_val : unsigned(31 downto 0);
-  signal gpr_wraddr : unsigned(4 downto 0);
-  signal gpr_wrval : unsigned(31 downto 0);
+  signal rs_val : unsigned(31 downto 0);
+  signal rt_val : unsigned(31 downto 0);
+  signal rd_val : unsigned(31 downto 0);
   signal gpr_we : std_logic;
 
   type recv_fifo_t is array(0 to 1023) of std_logic_vector(7 downto 0);
@@ -74,6 +79,18 @@ architecture behavioral of cpu is
   signal send_fifo_pending_word : unsigned(31 downto 0);
   signal send_fifo_pending_count : send_fifo_pending_count_t;
 begin
+  reg : register_file
+  port map (
+    clk => clk,
+    rst => rst,
+    gpr_rd0addr => instruction_register(25 downto 21),
+    gpr_rd0val => rs_val,
+    gpr_rd1addr => instruction_register(20 downto 16),
+    gpr_rd1val => rt_val,
+    gpr_wraddr => instruction_register(15 downto 11),
+    gpr_wrval => rd_val,
+    gpr_we => gpr_we);
+
   uart : rs232c
   generic map (
     clk_freq => clk_freq,
@@ -148,48 +165,18 @@ begin
   instruction_register <=
     instruction_memory(to_integer(program_counter(11 downto 2)));
 
-  gpr_writer : process(clk, rst)
-  begin
-    if rst = '1' then
-    elsif rising_edge(clk) then
-      if gpr_we = '1' then
-        -- report "hoge";
-        gprs(to_integer(gpr_wraddr)) <= gpr_wrval;
-      end if;
-    end if;
-  end process;
-
   cpu_combinatorical_process :
-  process(rst, cpu_state, instruction_register,
+  process(rst, cpu_state,
           recv_fifo_end, recv_fifo_start, recv_fifo_topword,
           send_fifo_end, send_fifo_start, send_fifo_add, send_fifo_we,
           send_fifo_pending_count, send_fifo_pending_word)
-    variable next_gpr_wraddr : unsigned(4 downto 0);
-    variable next_gpr_wrval : unsigned(31 downto 0);
-    variable next_gpr_we : std_logic;
     variable next_send_fifo_add : std_logic_vector(7 downto 0);
     variable next_send_fifo_we : std_logic;
   begin
-    next_gpr_wraddr := (others => '-');
-    next_gpr_wrval := (others => '-');
-    next_gpr_we := '0';
     next_send_fifo_add := (others => '-');
     next_send_fifo_we := '0';
     if rst = '1' then
     elsif cpu_state = running then
-      case instruction_register(31 downto 26) is
-      when "111111" =>
-        case instruction_register(5 downto 0) is
-        when "000000" =>
-          if recv_fifo_end - recv_fifo_start >= 4 then
-            next_gpr_wraddr := instruction_register(15 downto 11);
-            next_gpr_wrval := recv_fifo_topword;
-            next_gpr_we := '1';
-          end if;
-        when others =>
-        end case;
-      when others =>
-      end case;
       if send_fifo_end + 1 /= send_fifo_start then
         case send_fifo_pending_count is
         when 0 =>
@@ -212,15 +199,14 @@ begin
         end case;
       end if;
     end if;
-    gpr_wraddr <= next_gpr_wraddr;
-    gpr_wrval <= next_gpr_wrval;
-    gpr_we <= next_gpr_we;
     send_fifo_add <= next_send_fifo_add;
     send_fifo_we <= next_send_fifo_we;
   end process cpu_combinatorical_process;
 
   cpu_sequential_process : process(clk, rst)
     variable next_program_counter : unsigned(31 downto 0);
+    variable next_rd_val : unsigned(31 downto 0);
+    variable next_gpr_we : std_logic;
   begin
     if rst = '1' then
       cpu_state <= program_loading;
@@ -228,6 +214,8 @@ begin
       recv_fifo_start <= (others => '0');
       send_fifo_pending_count <= 0;
     elsif rising_edge(clk) then
+      next_rd_val := (others => '-');
+      next_gpr_we := '0';
       if cpu_state = program_loading then
         if recv_fifo_end - recv_fifo_start >= 4 then
           if recv_fifo_topword = (31 downto 0 => '1') then
@@ -252,17 +240,16 @@ begin
           when "000000" =>
             -- read word from RS-232C, blocking
             if recv_fifo_end - recv_fifo_start >= 4 then
-              -- gprs(to_integer(instruction_register(15 downto 11)))
-              --   <= recv_fifo_topword;
               recv_fifo_start <= recv_fifo_start + 4;
+              next_rd_val := recv_fifo_topword;
+              next_gpr_we := '1';
             else
               next_program_counter := program_counter;
             end if;
           when "000001" =>
             -- write word into RS-232C, blocking
             if send_fifo_pending_count = 0 then
-              send_fifo_pending_word
-                <= gprs(to_integer(instruction_register(15 downto 11)));
+              send_fifo_pending_word <= rs_val;
               send_fifo_pending_count <= 4;
             else
               next_program_counter := program_counter;
@@ -291,6 +278,8 @@ begin
           end case;
         end if;
       end if;
+      rd_val <= next_rd_val;
+      gpr_we <= next_gpr_we;
     end if;
   end process cpu_sequential_process;
 

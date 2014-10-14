@@ -2,7 +2,7 @@
 
 LIBRARYNAME = work
 SOURCES = \
-	serial.vhd core.vhd cpu.vhd \
+	serial.vhd core.vhd register_file.vhd cpu.vhd \
 	sramsim.vhd cpu_tb.vhd
 # SOURCES = \
 # 	serial.vhd cpu.vhd top.vhd \
