@@ -75,9 +75,6 @@ architecture behavioral of cpu is
   signal send_fifo_end : unsigned(9 downto 0);
   signal send_fifo_add : std_logic_vector(7 downto 0);
   signal send_fifo_we : std_logic;
-  subtype send_fifo_pending_count_t is integer range 0 to 4;
-  signal send_fifo_pending_word : unsigned(31 downto 0);
-  signal send_fifo_pending_count : send_fifo_pending_count_t;
 begin
   reg : register_file
   port map (
@@ -150,58 +147,8 @@ begin
     end if;
   end process send_from_fifo;
 
-  send_fifo_writer : process(clk, rst)
-  begin
-    if rst = '1' then
-      send_fifo_end <= (others => '0');
-    elsif rising_edge(clk) then
-      if send_fifo_we = '1' then
-        send_fifo(to_integer(send_fifo_end)) <= send_fifo_add;
-        send_fifo_end <= send_fifo_end + 1;
-      end if;
-    end if;
-  end process send_fifo_writer;
-
   instruction_register <=
     instruction_memory(to_integer(program_counter(11 downto 2)));
-
-  cpu_combinatorical_process :
-  process(rst, cpu_state,
-          recv_fifo_end, recv_fifo_start, recv_fifo_topword,
-          send_fifo_end, send_fifo_start, send_fifo_add, send_fifo_we,
-          send_fifo_pending_count, send_fifo_pending_word)
-    variable next_send_fifo_add : std_logic_vector(7 downto 0);
-    variable next_send_fifo_we : std_logic;
-  begin
-    next_send_fifo_add := (others => '-');
-    next_send_fifo_we := '0';
-    if rst = '1' then
-    elsif cpu_state = running then
-      if send_fifo_end + 1 /= send_fifo_start then
-        case send_fifo_pending_count is
-        when 0 =>
-        when 1 =>
-          next_send_fifo_add :=
-            std_logic_vector(send_fifo_pending_word(7 downto 0));
-          next_send_fifo_we := '1';
-        when 2 =>
-          next_send_fifo_add :=
-            std_logic_vector(send_fifo_pending_word(15 downto 8));
-          next_send_fifo_we := '1';
-        when 3 =>
-          next_send_fifo_add :=
-            std_logic_vector(send_fifo_pending_word(23 downto 16));
-          next_send_fifo_we := '1';
-        when 4 =>
-          next_send_fifo_add :=
-            std_logic_vector(send_fifo_pending_word(31 downto 24));
-          next_send_fifo_we := '1';
-        end case;
-      end if;
-    end if;
-    send_fifo_add <= next_send_fifo_add;
-    send_fifo_we <= next_send_fifo_we;
-  end process cpu_combinatorical_process;
 
   cpu_sequential_process : process(clk, rst)
     variable next_program_counter : unsigned(31 downto 0);
@@ -212,7 +159,7 @@ begin
       cpu_state <= program_loading;
       program_counter <= (others => '0');
       recv_fifo_start <= (others => '0');
-      send_fifo_pending_count <= 0;
+      send_fifo_end <= (others => '0');
     elsif rising_edge(clk) then
       next_rd_val := (others => '-');
       next_gpr_we := '0';
@@ -239,18 +186,20 @@ begin
           case instruction_register(5 downto 0) is
           when "000000" =>
             -- read word from RS-232C, blocking
-            if recv_fifo_end - recv_fifo_start >= 4 then
-              recv_fifo_start <= recv_fifo_start + 4;
-              next_rd_val := recv_fifo_topword;
+            if recv_fifo_end - recv_fifo_start >= 1 then
+              recv_fifo_start <= recv_fifo_start + 1;
+              next_rd_val(7 downto 0) :=
+                unsigned(recv_fifo(to_integer(recv_fifo_start)));
               next_gpr_we := '1';
             else
               next_program_counter := program_counter;
             end if;
           when "000001" =>
             -- write word into RS-232C, blocking
-            if send_fifo_pending_count = 0 then
-              send_fifo_pending_word <= rs_val;
-              send_fifo_pending_count <= 4;
+            if send_fifo_end + 1 /= send_fifo_start then
+              send_fifo(to_integer(send_fifo_end)) <=
+                std_logic_vector(rs_val(7 downto 0));
+              send_fifo_end <= send_fifo_end + 1;
             else
               next_program_counter := program_counter;
             end if;
@@ -264,19 +213,6 @@ begin
             integer'image(to_integer(instruction_register(31 downto 26)));
         end case;
         program_counter <= next_program_counter;
-        if send_fifo_end + 1 /= send_fifo_start then
-          case send_fifo_pending_count is
-          when 0 =>
-          when 1 =>
-            send_fifo_pending_count <= 0;
-          when 2 =>
-            send_fifo_pending_count <= 1;
-          when 3 =>
-            send_fifo_pending_count <= 2;
-          when 4 =>
-            send_fifo_pending_count <= 3;
-          end case;
-        end if;
       end if;
       rd_val <= next_rd_val;
       gpr_we <= next_gpr_we;
