@@ -42,9 +42,7 @@ architecture behavioral of cpu is
 
   type cpu_state_t is (
     program_loading,
-    running,
     instruction_fetch,
-    decode,
     execute,
     memory_access,
     writeback);
@@ -147,9 +145,6 @@ begin
     end if;
   end process send_from_fifo;
 
-  instruction_register <=
-    instruction_memory(to_integer(program_counter(11 downto 2)));
-
   cpu_sequential_process : process(clk, rst)
     variable next_program_counter : unsigned(31 downto 0);
     variable next_rd_val : unsigned(31 downto 0);
@@ -163,10 +158,11 @@ begin
     elsif rising_edge(clk) then
       next_rd_val := (others => '-');
       next_gpr_we := '0';
-      if cpu_state = program_loading then
+      case cpu_state is
+      when program_loading =>
         if recv_fifo_end - recv_fifo_start >= 4 then
           if recv_fifo_topword = (31 downto 0 => '1') then
-            cpu_state <= running;
+            cpu_state <= instruction_fetch;
             recv_fifo_start <= recv_fifo_start + 4;
             program_counter <= (others => '0');
           else
@@ -176,7 +172,15 @@ begin
             program_counter <= program_counter + 4;
           end if;
         end if;
-      elsif cpu_state = running then
+      when instruction_fetch =>
+        instruction_register <=
+          instruction_memory(to_integer(program_counter(11 downto 2)));
+        cpu_state <= execute;
+      when execute =>
+        cpu_state <= memory_access;
+      when memory_access =>
+        cpu_state <= writeback;
+      when writeback =>
         next_program_counter := program_counter + 4;
         case instruction_register(31 downto 26) is
         when "000010" =>
@@ -207,13 +211,13 @@ begin
             report "unknown function code for 0b111111: " &
               integer'image(to_integer(instruction_register(5 downto 0)));
           end case;
-          -- report "foo";
         when others =>
           report "unknown opcode " &
             integer'image(to_integer(instruction_register(31 downto 26)));
         end case;
+        cpu_state <= instruction_fetch;
         program_counter <= next_program_counter;
-      end if;
+      end case;
       rd_val <= next_rd_val;
       gpr_we <= next_gpr_we;
     end if;
