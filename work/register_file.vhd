@@ -21,12 +21,15 @@ end entity register_file;
 
 architecture behavioral of register_file is
   type gprs_t is array(31 downto 0) of unsigned_word;
-  signal gprs : gprs_t;
+  signal gprs : gprs_t
+    := (others => x"00000000");
 begin
   gpr_rd0val <=
+    (others => 'X') when TO_01(gpr_rd0addr, 'X')(4) = 'X' else
     gpr_wrval when gpr_we = '1' and gpr_rd0addr = gpr_wraddr else
     gprs(to_integer(gpr_rd0addr));
   gpr_rd1val <=
+    (others => 'X') when TO_01(gpr_rd1addr, 'X')(4) = 'X' else
     gpr_wrval when gpr_we = '1' and gpr_rd1addr = gpr_wraddr else
     gprs(to_integer(gpr_rd1addr));
 

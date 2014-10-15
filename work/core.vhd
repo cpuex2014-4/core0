@@ -40,4 +40,32 @@ package core is
       gpr_wrval : in unsigned_word;
       gpr_we : in std_logic);
   end component register_file;
+
+  component memory_controller is
+    port (
+      clk : in std_logic;
+      addr : in unsigned(31 downto 0);
+      data_write : in unsigned(31 downto 0);
+      data_read : out unsigned(31 downto 0);
+      we : in std_logic;
+      -- SRAM
+      ZD : inout std_logic_vector(31 downto 0); -- SRAM Data
+      ZDP : inout std_logic_vector(3 downto 0); -- SRAM Data, Parity
+      ZA : out std_logic_vector(19 downto 0); -- SRAM Address
+      XE1, E2A, XE3 : out std_logic; -- SRAM Chip Enables
+      XZBE : out std_logic_vector(3 downto 0); -- SRAM Byte Enables
+      XGA : out std_logic; -- SRAM Output Enable
+      XWA : out std_logic; -- SRAM Write Enable
+      XZCKE : out std_logic; -- SRAM Clock Enable
+      ZCLKMA : out std_logic_vector(1 downto 0); -- SRAM Clock
+      ADVA : out std_logic; -- SRAM Burst Mode / Negative Load Address
+      XFT : out std_logic; -- SRAM Flow Through Mode
+      XLBO : out std_logic; -- SRAM Linear Burst Order
+      ZZA : out std_logic); -- SRAM Sleep Mode
+  end component memory_controller;
+  subtype opcode_t is integer range 0 to 63;
+  constant OP_J : opcode_t := 2;
+  constant OP_LW : opcode_t := 35;
+  constant OP_SW : opcode_t := 43;
+  constant OP_IO : opcode_t := 63;
 end package core;

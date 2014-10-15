@@ -43,10 +43,20 @@ architecture behavioral of cpu is
   type cpu_state_t is (
     program_loading,
     instruction_fetch,
+    decode,
     execute,
     memory_access,
     writeback);
   signal cpu_state : cpu_state_t := program_loading;
+
+  type memory_access_state_t is (
+    memory_0, memory_1, memory_2, memory_3, memory_4);
+  signal memory_access_state : memory_access_state_t;
+
+  signal mem_addr : unsigned(31 downto 0);
+  signal mem_data_write : unsigned(31 downto 0);
+  signal mem_data_read : unsigned(31 downto 0);
+  signal mem_we : std_logic;
 
   type instruction_memory_t is
     array(1023 downto 0) of unsigned(31 downto 0);
@@ -55,6 +65,14 @@ architecture behavioral of cpu is
   signal program_counter : unsigned(29 downto 0) := (others => '0');
 
   signal instruction_register : unsigned(31 downto 0);
+
+  signal opcode : unsigned(5 downto 0);
+  signal rs_addr : unsigned(4 downto 0);
+  signal rt_addr : unsigned(4 downto 0);
+  signal rd_addr : unsigned(4 downto 0);
+  signal shamt : unsigned(4 downto 0);
+  signal funct : unsigned(5 downto 0);
+  signal immediate_val : unsigned(31 downto 0);
 
   signal rs_val : unsigned(31 downto 0);
   signal rt_val : unsigned(31 downto 0);
@@ -78,13 +96,36 @@ begin
   port map (
     clk => clk,
     rst => rst,
-    gpr_rd0addr => instruction_register(25 downto 21),
+    gpr_rd0addr => rs_addr,
     gpr_rd0val => rs_val,
-    gpr_rd1addr => instruction_register(20 downto 16),
+    gpr_rd1addr => rt_addr,
     gpr_rd1val => rt_val,
-    gpr_wraddr => instruction_register(15 downto 11),
+    gpr_wraddr => rd_addr,
     gpr_wrval => rd_val,
     gpr_we => gpr_we);
+
+  mem : memory_controller
+  port map (
+    clk => clk,
+    addr => mem_addr,
+    data_write => mem_data_write,
+    data_read => mem_data_read,
+    we => mem_we,
+    ZD => ZD,
+    ZDP => ZDP,
+    ZA => ZA,
+    XE1 => XE1,
+    E2A => E2A,
+    XE3 => XE3,
+    XZBE => XZBE,
+    XGA => XGA,
+    XWA => XWA,
+    XZCKE => XZCKE,
+    ZCLKMA => ZCLKMA,
+    ADVA => ADVA,
+    XFT => XFT,
+    XLBO => XLBO,
+    ZZA => ZZA);
 
   uart : rs232c
   generic map (
@@ -149,6 +190,11 @@ begin
     variable next_program_counter : unsigned(29 downto 0);
     variable next_rd_val : unsigned(31 downto 0);
     variable next_gpr_we : std_logic;
+    variable next_cpu_state : cpu_state_t;
+
+    variable next_mem_addr : unsigned(31 downto 0);
+    variable next_mem_data_write : unsigned(31 downto 0);
+    variable next_mem_we : std_logic;
   begin
     if rst = '1' then
       cpu_state <= program_loading;
@@ -158,11 +204,15 @@ begin
     elsif rising_edge(clk) then
       next_rd_val := (others => '-');
       next_gpr_we := '0';
+      next_cpu_state := cpu_state;
+      next_mem_addr := (others => '-');
+      next_mem_data_write := (others => '-');
+      next_mem_we := '0';
       case cpu_state is
       when program_loading =>
         if recv_fifo_end - recv_fifo_start >= 4 then
           if recv_fifo_topword = (31 downto 0 => '1') then
-            cpu_state <= instruction_fetch;
+            next_cpu_state := instruction_fetch;
             recv_fifo_start <= recv_fifo_start + 4;
             program_counter <= (others => '0');
           else
@@ -175,24 +225,104 @@ begin
       when instruction_fetch =>
         instruction_register <=
           instruction_memory(to_integer(program_counter(9 downto 0)));
-        cpu_state <= execute;
+        next_cpu_state := decode;
+      when decode =>
+        opcode <= instruction_register(31 downto 26);
+        if instruction_register(31 downto 26) = "000000" then
+          -- TODO: JR/JALR/SYSCALL/BREAK row
+          rs_addr <= instruction_register(25 downto 21);
+          rt_addr <= instruction_register(20 downto 16);
+          rd_addr <= instruction_register(15 downto 11);
+          shamt <= instruction_register(10 downto 6);
+          funct <= instruction_register(5 downto 0);
+          immediate_val <= (others => '-');
+        -- elsif instruction_register(31 downto 26) = "000001" then
+          -- TODO : REGIMM
+        elsif instruction_register(31 downto 27) = "00001" then
+          rs_addr <= (others => '-');
+          rt_addr <= (others => '-');
+          rd_addr <= (others => '-');
+          shamt <= (others => '-');
+          funct <= (others => '-');
+          immediate_val <= (31 downto 27 => '0') &
+                           instruction_register(26 downto 0);
+        else
+          rs_addr <= instruction_register(25 downto 21);
+          rt_addr <= instruction_register(20 downto 16);
+          rd_addr <= instruction_register(20 downto 16);
+          shamt <= (others => '-');
+          funct <= (others => '-');
+          if instruction_register(31 downto 28) = "0011" then
+            immediate_val <= (31 downto 16 => '0') &
+                             instruction_register(15 downto 0);
+          else
+            immediate_val <= (31 downto 16 =>
+                               instruction_register(15)) &
+                             instruction_register(15 downto 0);
+          end if;
+        end if;
+        next_cpu_state := execute;
       when execute =>
-        cpu_state <= memory_access;
+        next_cpu_state := writeback;
+        case opcode_t(to_integer(opcode)) is
+        when OP_LW =>
+          next_cpu_state := memory_access;
+          memory_access_state <= memory_0;
+          next_mem_addr := rs_val + immediate_val;
+          -- report "read_addr = " & integer'image(to_integer(next_mem_addr));
+        when OP_SW =>
+          next_cpu_state := memory_access;
+          memory_access_state <= memory_0;
+          next_mem_addr := rs_val + immediate_val;
+          -- report "rs_addr = " & integer'image(to_integer(rs_addr));
+          -- report "rs_val = " & integer'image(to_integer(rs_val));
+          -- report "immediate_val = " & integer'image(to_integer(immediate_val));
+          -- report "addr = " & integer'image(to_integer(next_mem_addr));
+          -- report "data_write = " & integer'image(to_integer(rt_val));
+          next_mem_data_write := rt_val;
+          next_mem_we := '1';
+        when others =>
+        end case;
       when memory_access =>
-        cpu_state <= writeback;
+        case opcode_t(to_integer(opcode)) is
+        when OP_LW =>
+          case memory_access_state is
+          when memory_0 =>
+            memory_access_state <= memory_1;
+          when memory_1 =>
+            next_cpu_state := writeback;
+          when others =>
+          end case;
+        when OP_SW =>
+          case memory_access_state is
+          when memory_0 =>
+            memory_access_state <= memory_1;
+          when memory_1 =>
+            next_cpu_state := writeback;
+          when others =>
+          end case;
+        when others =>
+          next_cpu_state := writeback;
+        end case;
       when writeback =>
         next_program_counter := program_counter + 1;
-        case instruction_register(31 downto 26) is
-        when "000010" =>
+        case opcode_t(to_integer(opcode)) is
+        when OP_J =>
           next_program_counter := "0000" & instruction_register(25 downto 0);
-        when "111111" =>
-          next_program_counter := next_program_counter;
+        when OP_LW =>
+          next_rd_val := mem_data_read;
+          next_gpr_we := '1';
+          -- report "memory_value = " &
+          --   integer'image(to_integer(mem_data_read));
+        when OP_SW =>
+        when OP_IO =>
           case instruction_register(5 downto 0) is
           when "000000" =>
             -- read word from RS-232C, blocking
             if recv_fifo_end - recv_fifo_start >= 1 then
               recv_fifo_start <= recv_fifo_start + 1;
-              next_rd_val(7 downto 0) :=
+              next_rd_val :=
+                (31 downto 8 => '0') &
                 unsigned(recv_fifo(to_integer(recv_fifo_start)));
               next_gpr_we := '1';
             else
@@ -215,28 +345,16 @@ begin
           report "unknown opcode " &
             integer'image(to_integer(instruction_register(31 downto 26)));
         end case;
-        cpu_state <= instruction_fetch;
+        next_cpu_state := instruction_fetch;
         program_counter <= next_program_counter;
       end case;
       rd_val <= next_rd_val;
       gpr_we <= next_gpr_we;
+      cpu_state <= next_cpu_state;
+      mem_addr <= next_mem_addr;
+      mem_data_write <= next_mem_data_write;
+      mem_we <= next_mem_we;
     end if;
   end process cpu_sequential_process;
-
-  XE1 <= '0';
-  E2A <= '1';
-  XE3 <= '0';
-  XGA <= '0';
-  XZCKE <= '0';
-  ZCLKMA <= (others => clk);
-  ADVA <= '0';
-  XLBO <= '1';
-  ZZA <= '0';
-  XFT <= '1';
-  XZBE <= (others => '0');
-  -- ZA <= (others => '0');
-  -- ZD <= (others => 'Z');
-  -- ZDP <= (others => 'Z');
-  XWA <= '1';
 end behavioral;
 
