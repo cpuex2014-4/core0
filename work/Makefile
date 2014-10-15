@@ -2,7 +2,8 @@
 
 LIBRARYNAME = work
 SOURCES = \
-	serial.vhd kakeudon.vhd memory_controller.vhd register_file.vhd cpu.vhd \
+	serial.vhd kakeudon.vhd memory_controller.vhd register_file.vhd \
+	io_rs232c.vhd core.vhd cpu.vhd \
 	sramsim.vhd cpu_tb.vhd
 # SOURCES = \
 # 	serial.vhd cpu.vhd top.vhd \

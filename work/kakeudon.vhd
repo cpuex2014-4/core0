@@ -3,7 +3,34 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
 package kakeudon is
+  constant clk_freq : real := 66.666e6;
   subtype unsigned_word is unsigned(31 downto 0);
+  component core is
+    port (
+      -- Register File
+      rs_addr : out unsigned(4 downto 0);
+      rs_val : in unsigned(31 downto 0);
+      rt_addr : out unsigned(4 downto 0);
+      rt_val : in unsigned(31 downto 0);
+      rd_addr : out unsigned(4 downto 0);
+      rd_val : out unsigned(31 downto 0);
+      gpr_we : out std_logic;
+      -- Memory Controller
+      mem_addr : out unsigned(31 downto 0);
+      mem_data_write : out unsigned(31 downto 0);
+      mem_data_read : in unsigned(31 downto 0);
+      mem_we : out std_logic;
+      -- RS-232C I/O Controller
+      rs232c_recv_empty : in std_logic;
+      rs232c_recv_top : in unsigned(7 downto 0);
+      rs232c_recv_consume : out std_logic;
+      rs232c_send_full : in std_logic;
+      rs232c_send_bottom : out unsigned(7 downto 0);
+      rs232c_send_push : out std_logic;
+      -- Clock And Reset
+      clk : in std_logic;
+      rst : in std_logic);
+  end component core;
   component cpu is
     port (
       -- SRAM
@@ -63,6 +90,21 @@ package kakeudon is
       XLBO : out std_logic; -- SRAM Linear Burst Order
       ZZA : out std_logic); -- SRAM Sleep Mode
   end component memory_controller;
+
+  component io_rs232c is
+    port (
+      clk : in std_logic;
+      rst : in std_logic;
+      RS_RX : in std_logic;
+      RS_TX : out std_logic;
+      recv_empty : out std_logic;
+      recv_top : out unsigned(7 downto 0);
+      recv_consume : in std_logic;
+      send_full : out std_logic;
+      send_bottom : in unsigned(7 downto 0);
+      send_push : in std_logic);
+  end component io_rs232c;
+
   subtype opcode_t is integer range 0 to 63;
   constant OP_J : opcode_t := 2;
   constant OP_LW : opcode_t := 35;
