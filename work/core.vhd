@@ -205,35 +205,28 @@ begin
         next_program_counter := program_counter + 1;
         case opcode_t(to_integer(opcode)) is
         when OP_J =>
-          next_program_counter := "0000" & instruction_register(25 downto 0);
+          next_program_counter := immediate_val(29 downto 0);
         when OP_LW =>
           next_rd_val := mem_data_read;
           next_gpr_we := '1';
         when OP_SW =>
-        when OP_IO =>
-          case instruction_register(5 downto 0) is
-          when "000000" =>
-            -- read word from RS-232C, blocking
-            if rs232c_recv_empty /= '1' then
-              next_rs232c_recv_consume := '1';
-              next_rd_val := (31 downto 8 => '0') & rs232c_recv_top;
-              next_gpr_we := '1';
-            else
-              next_program_counter := program_counter;
-            end if;
-          when "000001" =>
-            -- write word into RS-232C, blocking
-            if rs232c_send_full /= '1' then
-              next_rs232c_send_bottom := rs_val(7 downto 0);
-              next_rs232c_send_push := '1';
-            else
-              next_program_counter := program_counter;
-            end if;
-          when others =>
-            report "unknown function code for 0b111111: " &
-              integer'image(to_integer(instruction_register(5 downto 0)))
-              severity warning;
-          end case;
+        when OP_RRB =>
+          -- read word from RS-232C, blocking
+          if rs232c_recv_empty /= '1' then
+            next_rs232c_recv_consume := '1';
+            next_rd_val := (31 downto 8 => '0') & rs232c_recv_top;
+            next_gpr_we := '1';
+          else
+            next_program_counter := program_counter;
+          end if;
+        when OP_RSB =>
+          -- send word into RS-232C, blocking
+          if rs232c_send_full /= '1' then
+            next_rs232c_send_bottom := rt_val(7 downto 0);
+            next_rs232c_send_push := '1';
+          else
+            next_program_counter := program_counter;
+          end if;
         when others =>
           report "unknown opcode " &
             integer'image(to_integer(opcode))

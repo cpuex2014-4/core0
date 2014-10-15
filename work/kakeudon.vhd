@@ -109,5 +109,6 @@ package kakeudon is
   constant OP_J : opcode_t := 2;
   constant OP_LW : opcode_t := 35;
   constant OP_SW : opcode_t := 43;
-  constant OP_IO : opcode_t := 63;
+  constant OP_RRB : opcode_t := 28;
+  constant OP_RSB : opcode_t := 29;
 end package kakeudon;
