@@ -2,7 +2,7 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
-package core is
+package kakeudon is
   subtype unsigned_word is unsigned(31 downto 0);
   component cpu is
     port (
@@ -68,4 +68,4 @@ package core is
   constant OP_LW : opcode_t := 35;
   constant OP_SW : opcode_t := 43;
   constant OP_IO : opcode_t := 63;
-end package core;
+end package kakeudon;

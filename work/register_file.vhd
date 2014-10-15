@@ -4,7 +4,7 @@ use ieee.numeric_std.all;
 
 library work;
 use work.serial.all;
-use work.core.all;
+use work.kakeudon.all;
 
 entity register_file is
   port (

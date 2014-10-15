@@ -7,7 +7,7 @@ use std.textio.all;
 library work;
 use work.serial.all;
 use work.sramsim.all;
-use work.core.all;
+use work.kakeudon.all;
 
 entity cpu_tb is
 end entity cpu_tb;
