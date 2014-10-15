@@ -36,8 +36,9 @@ begin
   sequential: process(clk, rst)
   begin
     if rst = '1' then
+      gprs <= (others => x"00000000");
     elsif rising_edge(clk) then
-      if gpr_we = '1' then
+      if gpr_we = '1' and gpr_wraddr /= 0 then
         gprs(to_integer(gpr_wraddr)) <= gpr_wrval;
       end if;
     end if;
