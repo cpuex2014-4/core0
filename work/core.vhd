@@ -55,6 +55,8 @@ architecture behavioral of core is
   signal instruction_memory : instruction_memory_t;
 
   signal program_counter : unsigned(29 downto 0) := (others => '0');
+  signal program_counter_plus1 : unsigned(29 downto 0);
+  signal program_counter_plus1_plusimm : unsigned(29 downto 0);
 
   signal instruction_register : unsigned(31 downto 0);
 
@@ -147,6 +149,8 @@ begin
             severity warning;
         instruction_register <=
           instruction_memory(to_integer(program_counter(9 downto 0)));
+        program_counter_plus1 <=
+          program_counter + 1;
         next_cpu_state := decode;
       when decode =>
         assert TO_01(instruction_register, 'X')(0) /= 'X'
@@ -199,7 +203,6 @@ begin
         end case;
         next_cpu_state := execute;
       when execute =>
-        next_cpu_state := writeback;
         assert TO_01(opcode, 'X')(0) /= 'X'
           report "metavalue detected in opcode"
             severity warning;
@@ -219,6 +222,9 @@ begin
           next_mem_we := '1';
         when others =>
         end case;
+        program_counter_plus1_plusimm <=
+          program_counter_plus1 + immediate_val(29 downto 0);
+        next_cpu_state := writeback;
       when memory_access =>
         assert TO_01(opcode, 'X')(0) /= 'X'
           report "metavalue detected in opcode"
@@ -244,7 +250,7 @@ begin
           next_cpu_state := writeback;
         end case;
       when writeback =>
-        next_program_counter := program_counter + 1;
+        next_program_counter := program_counter_plus1;
         assert TO_01(opcode, 'X')(0) /= 'X'
           report "metavalue detected in opcode"
             severity warning;
@@ -257,8 +263,7 @@ begin
                                   jump_immediate_val;
         when OP_BEQ =>
           if alu_iszero = '1' then
-            next_program_counter :=
-              program_counter + 1 + immediate_val(29 downto 0);
+            next_program_counter := program_counter_plus1_plusimm;
           end if;
         when OP_LW =>
           next_rd_val := mem_data_read;
