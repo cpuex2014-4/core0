@@ -42,6 +42,10 @@ end entity core;
 architecture behavioral of core is
   signal cpu_state : cpu_state_t := program_loading;
 
+  signal loading_word : unsigned(31 downto 0);
+  subtype load_pos_t is integer range 0 to 4;
+  signal load_pos : load_pos_t := 4;
+
   type memory_access_state_t is (
     memory_0, memory_1, memory_2, memory_3, memory_4);
   signal memory_access_state : memory_access_state_t;
@@ -55,18 +59,27 @@ architecture behavioral of core is
   signal instruction_register : unsigned(31 downto 0);
 
   signal opcode : unsigned(5 downto 0);
-  signal shamt : unsigned(4 downto 0);
   signal funct : unsigned(5 downto 0);
+  signal jump_immediate_val : unsigned(25 downto 0);
   signal immediate_val : unsigned(31 downto 0);
 
-  signal loading_word : unsigned(31 downto 0);
-  subtype load_pos_t is integer range 0 to 4;
-  signal load_pos : load_pos_t := 4;
+  signal rd_addr1 : unsigned(4 downto 0);
+  signal rd_addr2 : unsigned(4 downto 0);
 
-  signal alu_src : std_logic := '0';
+  signal alu_src : std_logic;
+  signal reg_dst : std_logic;
 begin
   alu_in0 <= rs_val;
-  alu_in1 <= immediate_val when alu_src = '1' else rt_val;
+  alu_in1 <= (others => 'X') when TO_X01(alu_src) = 'X' else
+             immediate_val when alu_src = '1' else rt_val;
+
+  opcode <= instruction_register(31 downto 26);
+  rs_addr <= instruction_register(25 downto 21);
+  rt_addr <= instruction_register(20 downto 16);
+  rd_addr <= (others => 'X') when TO_X01(reg_dst) = 'X' else
+             rd_addr2 when reg_dst = '1' else rd_addr1;
+  funct <= instruction_register(5 downto 0);
+
   sequential : process(clk, rst)
     variable next_program_counter : unsigned(29 downto 0);
     variable next_rd_val : unsigned(31 downto 0);
@@ -80,6 +93,8 @@ begin
     variable next_rs232c_recv_consume : std_logic;
     variable next_rs232c_send_bottom : unsigned(7 downto 0);
     variable next_rs232c_send_push : std_logic;
+
+    variable imm_signext : std_logic;
   begin
     if rst = '1' then
       cpu_state <= program_loading;
@@ -139,39 +154,33 @@ begin
           report "metavalue detected in instruction_register; " &
                  "program_counter = " &
                  integer'image(to_integer(program_counter));
-        opcode <= instruction_register(31 downto 26);
+        rd_addr1 <= instruction_register(20 downto 16);
+        rd_addr2 <= instruction_register(15 downto 11);
+        jump_immediate_val <= instruction_register(25 downto 0);
         if instruction_register(31 downto 26) = "000000" then
           -- TODO: JR/JALR/SYSCALL/BREAK row
-          rs_addr <= instruction_register(25 downto 21);
-          rt_addr <= instruction_register(20 downto 16);
-          rd_addr <= instruction_register(15 downto 11);
-          shamt <= instruction_register(10 downto 6);
-          funct <= instruction_register(5 downto 0);
-          immediate_val <= (others => '-');
+          reg_dst <= '1';
+          imm_signext := '-';
         -- elsif instruction_register(31 downto 26) = "000001" then
           -- TODO : REGIMM
         elsif instruction_register(31 downto 27) = "00001" then
-          rs_addr <= (others => '-');
-          rt_addr <= (others => '-');
-          rd_addr <= (others => '-');
-          shamt <= (others => '-');
-          funct <= (others => '-');
-          immediate_val <= (31 downto 27 => '0') &
-                           instruction_register(26 downto 0);
+          reg_dst <= '-';
+          imm_signext := '-';
         else
-          rs_addr <= instruction_register(25 downto 21);
-          rt_addr <= instruction_register(20 downto 16);
-          rd_addr <= instruction_register(20 downto 16);
-          shamt <= (others => '-');
-          funct <= (others => '-');
+          reg_dst <= '0';
           if instruction_register(31 downto 28) = "0011" then
-            immediate_val <= (31 downto 16 => '0') &
-                             instruction_register(15 downto 0);
+            imm_signext := '0';
           else
-            immediate_val <= (31 downto 16 =>
-                               instruction_register(15)) &
-                             instruction_register(15 downto 0);
+            imm_signext := '1';
           end if;
+        end if;
+        immediate_val(15 downto 0) <= instruction_register(15 downto 0);
+        if TO_X01(imm_signext) = 'X' then
+          immediate_val(31 downto 16) <= (others => 'X');
+        elsif imm_signext = '1' then
+          immediate_val(31 downto 16) <= (others => instruction_register(15));
+        else
+          immediate_val(31 downto 16) <= (others => '0');
         end if;
         next_cpu_state := execute;
       when execute =>
@@ -240,7 +249,8 @@ begin
               severity warning;
           end case;
         when OP_J =>
-          next_program_counter := immediate_val(29 downto 0);
+          next_program_counter := program_counter(29 downto 26) &
+                                  jump_immediate_val;
         when OP_BEQ =>
           if alu_iszero = '1' then
             next_program_counter :=
