@@ -33,19 +33,13 @@ entity core is
     alu_in0 : out unsigned(31 downto 0);
     alu_in1 : out unsigned(31 downto 0);
     alu_out : in unsigned(31 downto 0);
+    alu_iszero : in std_logic;
     -- Clock And Reset
     clk : in std_logic;
     rst : in std_logic);
 end entity core;
 
 architecture behavioral of core is
-  type cpu_state_t is (
-    program_loading,
-    instruction_fetch,
-    decode,
-    execute,
-    memory_access,
-    writeback);
   signal cpu_state : cpu_state_t := program_loading;
 
   type memory_access_state_t is (
@@ -135,10 +129,16 @@ begin
           end case;
         end if;
       when instruction_fetch =>
+        assert TO_01(program_counter, 'X')(0) /= 'X'
+          report "metavalue detected in program_counter";
         instruction_register <=
           instruction_memory(to_integer(program_counter(9 downto 0)));
         next_cpu_state := decode;
       when decode =>
+        assert TO_01(instruction_register, 'X')(0) /= 'X'
+          report "metavalue detected in instruction_register; " &
+                 "program_counter = " &
+                 integer'image(to_integer(program_counter));
         opcode <= instruction_register(31 downto 26);
         if instruction_register(31 downto 26) = "000000" then
           -- TODO: JR/JALR/SYSCALL/BREAK row
@@ -176,16 +176,19 @@ begin
         next_cpu_state := execute;
       when execute =>
         next_cpu_state := writeback;
+        assert TO_01(opcode, 'X')(0) /= 'X'
+          report "metavalue detected in opcode";
         case opcode_t(to_integer(opcode)) is
         when OP_SPECIAL =>
           case funct_t(to_integer(funct)) is
           when FUNCT_ADDU =>
             alu_control <= "0010";
             alu_src <= '0';
-            next_rd_val := alu_out;
-            next_gpr_we := '1';
           when others =>
           end case;
+        when OP_BEQ =>
+          alu_control <= "0110";
+          alu_src <= '0';
         when OP_LW =>
           next_cpu_state := memory_access;
           memory_access_state <= memory_0;
@@ -199,6 +202,8 @@ begin
         when others =>
         end case;
       when memory_access =>
+        assert TO_01(opcode, 'X')(0) /= 'X'
+          report "metavalue detected in opcode";
         case opcode_t(to_integer(opcode)) is
         when OP_LW =>
           case memory_access_state is
@@ -221,6 +226,8 @@ begin
         end case;
       when writeback =>
         next_program_counter := program_counter + 1;
+        assert TO_01(opcode, 'X')(0) /= 'X'
+          report "metavalue detected in opcode";
         case opcode_t(to_integer(opcode)) is
         when OP_SPECIAL =>
           case funct_t(to_integer(funct)) is
@@ -234,6 +241,11 @@ begin
           end case;
         when OP_J =>
           next_program_counter := immediate_val(29 downto 0);
+        when OP_BEQ =>
+          if alu_iszero = '1' then
+            next_program_counter :=
+              program_counter + 1 + immediate_val(29 downto 0);
+          end if;
         when OP_LW =>
           next_rd_val := mem_data_read;
           next_gpr_we := '1';

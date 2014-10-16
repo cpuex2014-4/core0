@@ -56,6 +56,7 @@ architecture behavioral of cpu is
   signal alu_in0 : unsigned(31 downto 0);
   signal alu_in1 : unsigned(31 downto 0);
   signal alu_out : unsigned(31 downto 0);
+  signal alu_iszero : std_logic;
 begin
   core_unit : core
   port map (
@@ -80,6 +81,7 @@ begin
     alu_in0 => alu_in0,
     alu_in1 => alu_in1,
     alu_out => alu_out,
+    alu_iszero => alu_iszero,
     clk => clk,
     rst => rst);
 
@@ -137,6 +139,7 @@ begin
     alu_control => alu_control,
     alu_in0 => alu_in0,
     alu_in1 => alu_in1,
-    alu_out => alu_out);
+    alu_out => alu_out,
+    alu_iszero => alu_iszero);
 end behavioral;
 

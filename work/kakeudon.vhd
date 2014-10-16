@@ -5,6 +5,15 @@ use ieee.numeric_std.all;
 package kakeudon is
   constant clk_freq : real := 66.666e6;
   subtype unsigned_word is unsigned(31 downto 0);
+
+  type cpu_state_t is (
+    program_loading,
+    instruction_fetch,
+    decode,
+    execute,
+    memory_access,
+    writeback);
+
   component core is
     port (
       -- Register File
@@ -32,6 +41,7 @@ package kakeudon is
       alu_in0 : out unsigned(31 downto 0);
       alu_in1 : out unsigned(31 downto 0);
       alu_out : in unsigned(31 downto 0);
+      alu_iszero : in std_logic;
       -- Clock And Reset
       clk : in std_logic;
       rst : in std_logic);
@@ -115,12 +125,14 @@ package kakeudon is
       alu_control : in unsigned(3 downto 0);
       alu_in0 : in unsigned(31 downto 0);
       alu_in1 : in unsigned(31 downto 0);
-      alu_out : out unsigned(31 downto 0));
+      alu_out : buffer unsigned(31 downto 0);
+      alu_iszero : out std_logic);
   end component alu;
 
   subtype opcode_t is integer range 0 to 63;
   constant OP_SPECIAL : opcode_t := 0;
   constant OP_J : opcode_t := 2;
+  constant OP_BEQ : opcode_t := 4;
   constant OP_LW : opcode_t := 35;
   constant OP_SW : opcode_t := 43;
   constant OP_RRB : opcode_t := 28;

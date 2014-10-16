@@ -12,11 +12,14 @@ entity alu is
     alu_control : in unsigned(3 downto 0);
     alu_in0 : in unsigned(31 downto 0);
     alu_in1 : in unsigned(31 downto 0);
-    alu_out : out unsigned(31 downto 0));
+    alu_out : buffer unsigned(31 downto 0);
+    alu_iszero : out std_logic);
 end entity alu;
 
 architecture behavioral of alu is
 begin
+  alu_iszero <= 'X' when TO_01(alu_out, 'X')(31) = 'X' else
+                '1' when alu_out = 0 else '0';
   sequential: process(clk)
   begin
     if rising_edge(clk) then
