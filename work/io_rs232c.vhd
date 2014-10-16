@@ -32,9 +32,9 @@ architecture behavioral of io_rs232c is
   signal send_fifo_end : unsigned(9 downto 0) := (others => '0');
 
   signal uart_send_busy : std_logic;
-  signal uart_send_go : std_logic;
+  signal uart_send_go : std_logic := '0';
   signal uart_send_data : std_logic_vector(7 downto 0);
-  signal uart_recv_busy : std_logic;
+  signal uart_recv_busy : std_logic := '0';
   signal uart_recv_done : std_logic;
   signal uart_recv_data : std_logic_vector(7 downto 0);
 

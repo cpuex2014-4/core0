@@ -24,10 +24,10 @@ entity core is
     -- RS-232C I/O Controller
     rs232c_recv_empty : in std_logic;
     rs232c_recv_top : in unsigned(7 downto 0);
-    rs232c_recv_consume : out std_logic;
+    rs232c_recv_consume : out std_logic := '0';
     rs232c_send_full : in std_logic;
     rs232c_send_bottom : out unsigned(7 downto 0);
-    rs232c_send_push : out std_logic;
+    rs232c_send_push : out std_logic := '0';
     -- Clock And Reset
     clk : in std_logic;
     rst : in std_logic);
