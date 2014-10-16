@@ -51,6 +51,11 @@ architecture behavioral of cpu is
   signal rs232c_send_full : std_logic;
   signal rs232c_send_bottom : unsigned(7 downto 0);
   signal rs232c_send_push : std_logic;
+
+  signal alu_control : unsigned(3 downto 0);
+  signal alu_in0 : unsigned(31 downto 0);
+  signal alu_in1 : unsigned(31 downto 0);
+  signal alu_out : unsigned(31 downto 0);
 begin
   core_unit : core
   port map (
@@ -71,6 +76,10 @@ begin
     rs232c_send_full => rs232c_send_full,
     rs232c_send_bottom => rs232c_send_bottom,
     rs232c_send_push => rs232c_send_push,
+    alu_control => alu_control,
+    alu_in0 => alu_in0,
+    alu_in1 => alu_in1,
+    alu_out => alu_out,
     clk => clk,
     rst => rst);
 
@@ -121,5 +130,13 @@ begin
     send_full => rs232c_send_full,
     send_bottom => rs232c_send_bottom,
     send_push => rs232c_send_push);
+
+  alu_unit : alu
+  port map (
+    clk => clk,
+    alu_control => alu_control,
+    alu_in0 => alu_in0,
+    alu_in1 => alu_in1,
+    alu_out => alu_out);
 end behavioral;
 

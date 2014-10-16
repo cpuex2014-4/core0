@@ -27,6 +27,11 @@ package kakeudon is
       rs232c_send_full : in std_logic;
       rs232c_send_bottom : out unsigned(7 downto 0);
       rs232c_send_push : out std_logic;
+      -- ALU
+      alu_control : out unsigned(3 downto 0);
+      alu_in0 : out unsigned(31 downto 0);
+      alu_in1 : out unsigned(31 downto 0);
+      alu_out : in unsigned(31 downto 0);
       -- Clock And Reset
       clk : in std_logic;
       rst : in std_logic);
@@ -104,11 +109,23 @@ package kakeudon is
       send_bottom : in unsigned(7 downto 0);
       send_push : in std_logic);
   end component io_rs232c;
+  component alu is
+    port (
+      clk : in std_logic;
+      alu_control : in unsigned(3 downto 0);
+      alu_in0 : in unsigned(31 downto 0);
+      alu_in1 : in unsigned(31 downto 0);
+      alu_out : out unsigned(31 downto 0));
+  end component alu;
 
   subtype opcode_t is integer range 0 to 63;
+  constant OP_SPECIAL : opcode_t := 0;
   constant OP_J : opcode_t := 2;
   constant OP_LW : opcode_t := 35;
   constant OP_SW : opcode_t := 43;
   constant OP_RRB : opcode_t := 28;
   constant OP_RSB : opcode_t := 29;
+
+  subtype funct_t is integer range 0 to 63;
+  constant FUNCT_ADDU : funct_t := 33;
 end package kakeudon;

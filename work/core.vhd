@@ -28,6 +28,11 @@ entity core is
     rs232c_send_full : in std_logic;
     rs232c_send_bottom : out unsigned(7 downto 0);
     rs232c_send_push : out std_logic := '0';
+    -- ALU
+    alu_control : out unsigned(3 downto 0);
+    alu_in0 : out unsigned(31 downto 0);
+    alu_in1 : out unsigned(31 downto 0);
+    alu_out : in unsigned(31 downto 0);
     -- Clock And Reset
     clk : in std_logic;
     rst : in std_logic);
@@ -63,7 +68,11 @@ architecture behavioral of core is
   signal loading_word : unsigned(31 downto 0);
   subtype load_pos_t is integer range 0 to 4;
   signal load_pos : load_pos_t := 4;
+
+  signal alu_src : std_logic := '0';
 begin
+  alu_in0 <= rs_val;
+  alu_in1 <= immediate_val when alu_src = '1' else rt_val;
   sequential : process(clk, rst)
     variable next_program_counter : unsigned(29 downto 0);
     variable next_rd_val : unsigned(31 downto 0);
@@ -168,6 +177,15 @@ begin
       when execute =>
         next_cpu_state := writeback;
         case opcode_t(to_integer(opcode)) is
+        when OP_SPECIAL =>
+          case funct_t(to_integer(funct)) is
+          when FUNCT_ADDU =>
+            alu_control <= "0010";
+            alu_src <= '0';
+            next_rd_val := alu_out;
+            next_gpr_we := '1';
+          when others =>
+          end case;
         when OP_LW =>
           next_cpu_state := memory_access;
           memory_access_state <= memory_0;
@@ -204,6 +222,16 @@ begin
       when writeback =>
         next_program_counter := program_counter + 1;
         case opcode_t(to_integer(opcode)) is
+        when OP_SPECIAL =>
+          case funct_t(to_integer(funct)) is
+          when FUNCT_ADDU =>
+            next_rd_val := alu_out;
+            next_gpr_we := '1';
+          when others =>
+            report "unknown funct " &
+              integer'image(to_integer(funct))
+              severity warning;
+          end case;
         when OP_J =>
           next_program_counter := immediate_val(29 downto 0);
         when OP_LW =>
