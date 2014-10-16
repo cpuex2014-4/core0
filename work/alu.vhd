@@ -8,7 +8,6 @@ use work.kakeudon.all;
 
 entity alu is
   port (
-    clk : in std_logic;
     alu_control : in unsigned(3 downto 0);
     alu_in0 : in unsigned(31 downto 0);
     alu_in1 : in unsigned(31 downto 0);
@@ -20,9 +19,11 @@ architecture behavioral of alu is
 begin
   alu_iszero <= 'X' when TO_01(alu_out, 'X')(31) = 'X' else
                 '1' when alu_out = 0 else '0';
-  sequential: process(clk)
+  combinational: process(alu_control, alu_in0, alu_in1)
   begin
-    if rising_edge(clk) then
+    if TO_01(alu_control, 'X')(0) = 'X' then
+      alu_out <= (others => 'X');
+    else
       case alu_control is
       when "0000" =>
         alu_out <= alu_in0 and alu_in1;
@@ -44,6 +45,6 @@ begin
         alu_out <= (others => '0');
       end case;
     end if;
-  end process sequential;
+  end process combinational;
 end architecture behavioral;
 

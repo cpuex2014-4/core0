@@ -32,7 +32,7 @@ entity cpu is
 end cpu;
 
 architecture behavioral of cpu is
-  signal mem_addr : unsigned(31 downto 0);
+  signal mem_addr : unsigned(29 downto 0);
   signal mem_data_write : unsigned(31 downto 0);
   signal mem_data_read : unsigned(31 downto 0);
   signal mem_we : std_logic;
@@ -135,7 +135,6 @@ begin
 
   alu_unit : alu
   port map (
-    clk => clk,
     alu_control => alu_control,
     alu_in0 => alu_in0,
     alu_in1 => alu_in1,

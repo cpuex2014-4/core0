@@ -17,7 +17,7 @@ entity core is
     rd_val : out unsigned(31 downto 0);
     gpr_we : out std_logic;
     -- Memory Controller
-    mem_addr : out unsigned(31 downto 0);
+    mem_addr : out unsigned(29 downto 0);
     mem_data_write : out unsigned(31 downto 0);
     mem_data_read : in unsigned(31 downto 0);
     mem_we : out std_logic;
@@ -66,6 +66,7 @@ architecture behavioral of core is
   signal rd_addr1 : unsigned(4 downto 0);
   signal rd_addr2 : unsigned(4 downto 0);
 
+  signal alu_op : unsigned(1 downto 0);
   signal alu_src : std_logic;
   signal reg_dst : std_logic;
 begin
@@ -78,7 +79,6 @@ begin
   rt_addr <= instruction_register(20 downto 16);
   rd_addr <= (others => 'X') when TO_X01(reg_dst) = 'X' else
              rd_addr2 when reg_dst = '1' else rd_addr1;
-  funct <= instruction_register(5 downto 0);
 
   sequential : process(clk, rst)
     variable next_program_counter : unsigned(29 downto 0);
@@ -86,7 +86,6 @@ begin
     variable next_gpr_we : std_logic;
     variable next_cpu_state : cpu_state_t;
 
-    variable next_mem_addr : unsigned(31 downto 0);
     variable next_mem_data_write : unsigned(31 downto 0);
     variable next_mem_we : std_logic;
 
@@ -107,7 +106,6 @@ begin
       next_rd_val := (others => '-');
       next_gpr_we := '0';
       next_cpu_state := cpu_state;
-      next_mem_addr := (others => '-');
       next_mem_data_write := (others => '-');
       next_mem_we := '0';
       next_rs232c_recv_consume := '0';
@@ -145,7 +143,8 @@ begin
         end if;
       when instruction_fetch =>
         assert TO_01(program_counter, 'X')(0) /= 'X'
-          report "metavalue detected in program_counter";
+          report "metavalue detected in program_counter"
+            severity warning;
         instruction_register <=
           instruction_memory(to_integer(program_counter(9 downto 0)));
         next_cpu_state := decode;
@@ -153,7 +152,8 @@ begin
         assert TO_01(instruction_register, 'X')(0) /= 'X'
           report "metavalue detected in instruction_register; " &
                  "program_counter = " &
-                 integer'image(to_integer(program_counter));
+                 integer'image(to_integer(program_counter))
+            severity warning;
         rd_addr1 <= instruction_register(20 downto 16);
         rd_addr2 <= instruction_register(15 downto 11);
         jump_immediate_val <= instruction_register(25 downto 0);
@@ -182,37 +182,47 @@ begin
         else
           immediate_val(31 downto 16) <= (others => '0');
         end if;
+        case opcode_t(to_integer(opcode)) is
+        when OP_SPECIAL =>
+          alu_op <= "10";
+          alu_src <= '0';
+        when OP_BEQ =>
+          alu_op <= "01";
+          alu_src <= '0';
+        when OP_LW =>
+          alu_op <= "00";
+          alu_src <= '1';
+        when OP_SW =>
+          alu_op <= "00";
+          alu_src <= '1';
+        when others =>
+        end case;
         next_cpu_state := execute;
       when execute =>
         next_cpu_state := writeback;
         assert TO_01(opcode, 'X')(0) /= 'X'
-          report "metavalue detected in opcode";
+          report "metavalue detected in opcode"
+            severity warning;
         case opcode_t(to_integer(opcode)) is
         when OP_SPECIAL =>
-          case funct_t(to_integer(funct)) is
-          when FUNCT_ADDU =>
-            alu_control <= "0010";
-            alu_src <= '0';
-          when others =>
-          end case;
         when OP_BEQ =>
-          alu_control <= "0110";
-          alu_src <= '0';
         when OP_LW =>
           next_cpu_state := memory_access;
           memory_access_state <= memory_0;
-          next_mem_addr := rs_val + immediate_val;
+          -- TODO memory alignment check
+          mem_addr <= alu_out(31 downto 2);
         when OP_SW =>
           next_cpu_state := memory_access;
           memory_access_state <= memory_0;
-          next_mem_addr := rs_val + immediate_val;
+          mem_addr <= alu_out(31 downto 2);
           next_mem_data_write := rt_val;
           next_mem_we := '1';
         when others =>
         end case;
       when memory_access =>
         assert TO_01(opcode, 'X')(0) /= 'X'
-          report "metavalue detected in opcode";
+          report "metavalue detected in opcode"
+            severity warning;
         case opcode_t(to_integer(opcode)) is
         when OP_LW =>
           case memory_access_state is
@@ -236,18 +246,12 @@ begin
       when writeback =>
         next_program_counter := program_counter + 1;
         assert TO_01(opcode, 'X')(0) /= 'X'
-          report "metavalue detected in opcode";
+          report "metavalue detected in opcode"
+            severity warning;
         case opcode_t(to_integer(opcode)) is
         when OP_SPECIAL =>
-          case funct_t(to_integer(funct)) is
-          when FUNCT_ADDU =>
-            next_rd_val := alu_out;
-            next_gpr_we := '1';
-          when others =>
-            report "unknown funct " &
-              integer'image(to_integer(funct))
-              severity warning;
-          end case;
+          next_rd_val := alu_out;
+          next_gpr_we := '1';
         when OP_J =>
           next_program_counter := program_counter(29 downto 26) &
                                   jump_immediate_val;
@@ -288,7 +292,6 @@ begin
       rd_val <= next_rd_val;
       gpr_we <= next_gpr_we;
       cpu_state <= next_cpu_state;
-      mem_addr <= next_mem_addr;
       mem_data_write <= next_mem_data_write;
       mem_we <= next_mem_we;
       rs232c_recv_consume <= next_rs232c_recv_consume;
@@ -296,4 +299,23 @@ begin
       rs232c_send_push <= next_rs232c_send_push;
     end if;
   end process sequential;
+
+  alu_controller: process(alu_op, immediate_val)
+  begin
+    case alu_op is
+    when "00" =>
+      alu_control <= "0010";
+    when "01" =>
+      alu_control <= "0110";
+    when "10" =>
+      case immediate_val(5 downto 0) is
+      when "100001" =>
+        alu_control <= "0010";
+      when others =>
+        alu_control <= (others => '-');
+      end case;
+    when others =>
+      alu_control <= (others => '-');
+    end case;
+  end process alu_controller;
 end behavioral;

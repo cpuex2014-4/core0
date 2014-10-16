@@ -128,7 +128,9 @@ begin
     type memory_array_t is array(0 to 1048575) of memory_cell;
     variable memory_array : memory_array_t;
     variable addr_memo : unsigned(19 downto 0);
+    variable wrupd : boolean;
   begin
+    wrupd := false;
     if rising_edge(K) then
       SA_latched <= SA;
       if ADV_delayed /= '1' then
@@ -152,6 +154,7 @@ begin
               severity warning;
           end if;
         else
+          wrupd := true;
           if XBA2 /= '1' then
             memory_array(to_integer(addr_memo))(17 downto 9)
               := data_inA;
@@ -162,19 +165,19 @@ begin
           end if;
           assert not report_write
             report "write " & integer'image(to_integer(unsigned(memory_addr)))
-                   & " " & integer'image(to_integer(unsigned(memory_array(to_integer(unsigned(memory_addr))))));
+                   & " " & integer'image(to_integer(unsigned(memory_array(to_integer(unsigned(memory_addr)))))) severity note;
         end if;
       end if;
     end if;
-    if memory_addr'event then
+    if memory_addr'event or wrupd then
       addr_memo := TO_01(unsigned(memory_addr), 'X');
       if addr_memo(19) = 'X' then
-        assert not report_read report "read X";
+        assert not report_read report "read X" severity note;
         memory_output <= (others => 'X');
       else
         assert not report_read
           report "read " & integer'image(to_integer(addr_memo))
-                 & " " & integer'image(to_integer(unsigned(memory_array(to_integer(addr_memo)))));
+                 & " " & integer'image(to_integer(unsigned(memory_array(to_integer(addr_memo))))) severity note;
         memory_output <=
           memory_array(to_integer(addr_memo));
       end if;

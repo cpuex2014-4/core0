@@ -25,7 +25,7 @@ package kakeudon is
       rd_val : out unsigned(31 downto 0);
       gpr_we : out std_logic;
       -- Memory Controller
-      mem_addr : out unsigned(31 downto 0);
+      mem_addr : out unsigned(29 downto 0);
       mem_data_write : out unsigned(31 downto 0);
       mem_data_read : in unsigned(31 downto 0);
       mem_we : out std_logic;
@@ -86,7 +86,7 @@ package kakeudon is
   component memory_controller is
     port (
       clk : in std_logic;
-      addr : in unsigned(31 downto 0);
+      addr : in unsigned(29 downto 0);
       data_write : in unsigned(31 downto 0);
       data_read : out unsigned(31 downto 0);
       we : in std_logic;
@@ -119,9 +119,9 @@ package kakeudon is
       send_bottom : in unsigned(7 downto 0);
       send_push : in std_logic);
   end component io_rs232c;
+
   component alu is
     port (
-      clk : in std_logic;
       alu_control : in unsigned(3 downto 0);
       alu_in0 : in unsigned(31 downto 0);
       alu_in1 : in unsigned(31 downto 0);
@@ -137,7 +137,4 @@ package kakeudon is
   constant OP_SW : opcode_t := 43;
   constant OP_RRB : opcode_t := 28;
   constant OP_RSB : opcode_t := 29;
-
-  subtype funct_t is integer range 0 to 63;
-  constant FUNCT_ADDU : funct_t := 33;
 end package kakeudon;

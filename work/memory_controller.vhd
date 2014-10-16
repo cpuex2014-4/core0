@@ -9,7 +9,7 @@ use work.kakeudon.all;
 entity memory_controller is
   port (
     clk : in std_logic;
-    addr : in unsigned(31 downto 0);
+    addr : in unsigned(29 downto 0);
     data_write : in unsigned(31 downto 0);
     data_read : out unsigned(31 downto 0);
     we : in std_logic;
@@ -46,7 +46,7 @@ begin
   ZZA <= '0';
   XFT <= '1';
   XZBE <= (others => '0');
-  ZA <= std_logic_vector(addr(21 downto 2));
+  ZA <= std_logic_vector(addr(19 downto 0));
   ZDP <= (others => 'Z') when we_delay2 /= '1' else (others => '0');
   ZD <= (others => 'Z') when we_delay2 /= '1' else
         std_logic_vector(data_write_delay2);
