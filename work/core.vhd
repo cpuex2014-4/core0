@@ -40,6 +40,14 @@ entity core is
 end entity core;
 
 architecture behavioral of core is
+  type cpu_state_t is (
+    program_loading,
+    instruction_fetch,
+    decode,
+    execute,
+    memory_access_0,
+    memory_access_1,
+    writeback);
   signal cpu_state : cpu_state_t := program_loading;
 
   signal loading_word : unsigned(31 downto 0);
@@ -264,12 +272,12 @@ begin
         when OP_SPECIAL =>
         when OP_BEQ =>
         when OP_LW =>
-          next_cpu_state := memory_access;
+          next_cpu_state := memory_access_0;
           memory_access_state <= memory_0;
           -- TODO memory alignment check
           mem_addr <= alu_out(31 downto 2);
         when OP_SW =>
-          next_cpu_state := memory_access;
+          next_cpu_state := memory_access_0;
           memory_access_state <= memory_0;
           mem_addr <= alu_out(31 downto 2);
           next_mem_data_write := rt_val;
@@ -279,30 +287,10 @@ begin
         program_counter_plus1_plusimm <=
           program_counter_plus1 + immediate_val(29 downto 0);
         next_cpu_state := writeback;
-      when memory_access =>
-        assert TO_01(opcode, 'X')(0) /= 'X'
-          report "metavalue detected in opcode"
-            severity warning;
-        case opcode_t(to_integer(opcode)) is
-        when OP_LW =>
-          case memory_access_state is
-          when memory_0 =>
-            memory_access_state <= memory_1;
-          when memory_1 =>
-            next_cpu_state := writeback;
-          when others =>
-          end case;
-        when OP_SW =>
-          case memory_access_state is
-          when memory_0 =>
-            memory_access_state <= memory_1;
-          when memory_1 =>
-            next_cpu_state := writeback;
-          when others =>
-          end case;
-        when others =>
-          next_cpu_state := writeback;
-        end case;
+      when memory_access_0 =>
+        next_cpu_state := memory_access_1;
+      when memory_access_1 =>
+        next_cpu_state := writeback;
       when writeback =>
         next_program_counter := program_counter_plus1;
         assert TO_01(opcode, 'X')(0) /= 'X'
@@ -389,7 +377,7 @@ begin
   begin
     if rst = '1' then
     elsif rising_edge(clk) then
-      if cpu_state = memory_access then
+      if cpu_state = execute then
       end if;
     end if;
   end process execute_process;
@@ -398,7 +386,7 @@ begin
   begin
     if rst = '1' then
     elsif rising_edge(clk) then
-      if cpu_state = memory_access then
+      if cpu_state = memory_access_0 then
       end if;
     end if;
   end process memory_access_process;

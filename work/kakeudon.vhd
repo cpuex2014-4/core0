@@ -6,14 +6,6 @@ package kakeudon is
   constant clk_freq : real := 66.666e6;
   subtype unsigned_word is unsigned(31 downto 0);
 
-  type cpu_state_t is (
-    program_loading,
-    instruction_fetch,
-    decode,
-    execute,
-    memory_access,
-    writeback);
-
   component core is
     port (
       -- Register File
