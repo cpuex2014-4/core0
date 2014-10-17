@@ -68,9 +68,18 @@ architecture behavioral of core is
   signal rd_addr1 : unsigned(4 downto 0);
   signal rd_addr2 : unsigned(4 downto 0);
 
-  signal alu_op : unsigned(1 downto 0);
+  type rs_io_mode_t is (rs_io_normal, rs_io_recv, rs_io_send);
+  signal rs_io_mode : rs_io_mode_t;
+  type branch_target_t is (branch_target_normal,
+                           branch_target_j, branch_target_b,
+                           branch_target_dontcare);
+  signal branch_target : branch_target_t;
+  type alu_op_t is (alu_op_add, alu_op_sub, alu_op_normal, alu_op_dontcare);
+  signal alu_op : alu_op_t;
   signal alu_src : std_logic;
   signal reg_dst : std_logic;
+  signal reg_write : std_logic;
+  signal mem_to_reg : std_logic;
 begin
   alu_in0 <= rs_val;
   alu_in1 <= (others => 'X') when TO_X01(alu_src) = 'X' else
@@ -188,18 +197,63 @@ begin
         end if;
         case opcode_t(to_integer(opcode)) is
         when OP_SPECIAL =>
-          alu_op <= "10";
+          alu_op <= alu_op_normal;
           alu_src <= '0';
+          reg_write <= '1';
+          mem_to_reg <= '0';
+          rs_io_mode <= rs_io_normal;
+          branch_target <= branch_target_normal;
+        when OP_J =>
+          alu_op <= alu_op_dontcare;
+          alu_src <= '-';
+          reg_write <= '0';
+          mem_to_reg <= '-';
+          rs_io_mode <= rs_io_normal;
+          branch_target <= branch_target_j;
         when OP_BEQ =>
-          alu_op <= "01";
+          alu_op <= alu_op_sub;
           alu_src <= '0';
+          reg_write <= '0';
+          mem_to_reg <= '-';
+          rs_io_mode <= rs_io_normal;
+          branch_target <= branch_target_b;
         when OP_LW =>
-          alu_op <= "00";
+          alu_op <= alu_op_add;
           alu_src <= '1';
+          reg_write <= '1';
+          mem_to_reg <= '1';
+          rs_io_mode <= rs_io_normal;
+          branch_target <= branch_target_normal;
         when OP_SW =>
-          alu_op <= "00";
+          alu_op <= alu_op_add;
           alu_src <= '1';
+          reg_write <= '0';
+          mem_to_reg <= '-';
+          rs_io_mode <= rs_io_normal;
+          branch_target <= branch_target_normal;
+        when OP_RRB =>
+          alu_op <= alu_op_add;
+          alu_src <= '1';
+          reg_write <= '1';
+          mem_to_reg <= '0';
+          rs_io_mode <= rs_io_recv;
+          branch_target <= branch_target_normal;
+        when OP_RSB =>
+          alu_op <= alu_op_add;
+          alu_src <= '0';
+          reg_write <= '0';
+          mem_to_reg <= '-';
+          rs_io_mode <= rs_io_send;
+          branch_target <= branch_target_normal;
         when others =>
+          report "unknown opcode " &
+            integer'image(to_integer(opcode))
+            severity warning;
+          alu_op <= alu_op_dontcare;
+          alu_src <= '-';
+          reg_write <= '-';
+          mem_to_reg <= '-';
+          rs_io_mode <= rs_io_normal;
         end case;
         next_cpu_state := execute;
       when execute =>
@@ -254,22 +308,32 @@ begin
         assert TO_01(opcode, 'X')(0) /= 'X'
           report "metavalue detected in opcode"
             severity warning;
-        case opcode_t(to_integer(opcode)) is
-        when OP_SPECIAL =>
-          next_rd_val := alu_out;
-          next_gpr_we := '1';
-        when OP_J =>
-          next_program_counter := program_counter(29 downto 26) &
-                                  jump_immediate_val;
-        when OP_BEQ =>
-          if alu_iszero = '1' then
-            next_program_counter := program_counter_plus1_plusimm;
+        case rs_io_mode is
+        when rs_io_normal =>
+          next_gpr_we := reg_write;
+          if TO_X01(mem_to_reg) = 'X' then
+            next_rd_val := (others => '-');
+          elsif mem_to_reg = '1' then
+            next_rd_val := mem_data_read;
+          else
+            next_rd_val := alu_out;
           end if;
-        when OP_LW =>
-          next_rd_val := mem_data_read;
-          next_gpr_we := '1';
-        when OP_SW =>
-        when OP_RRB =>
+          case branch_target is
+          when branch_target_normal =>
+            next_program_counter := program_counter_plus1;
+          when branch_target_j =>
+            next_program_counter := program_counter(29 downto 26) &
+                                    jump_immediate_val;
+          when branch_target_b =>
+            if alu_iszero = '1' then
+              next_program_counter := program_counter_plus1_plusimm;
+            else
+              next_program_counter := program_counter_plus1;
+            end if;
+          when branch_target_dontcare =>
+            next_program_counter := (others => '-');
+          end case;
+        when rs_io_recv =>
           -- read word from RS-232C, blocking
           if rs232c_recv_empty /= '1' then
             next_rs232c_recv_consume := '1';
@@ -277,19 +341,17 @@ begin
             next_gpr_we := '1';
           else
             next_program_counter := program_counter;
+            next_gpr_we := '0';
           end if;
-        when OP_RSB =>
+        when rs_io_send =>
+          next_gpr_we := '0';
           -- send word into RS-232C, blocking
           if rs232c_send_full /= '1' then
-            next_rs232c_send_bottom := rt_val(7 downto 0);
+            next_rs232c_send_bottom := alu_out(7 downto 0);
             next_rs232c_send_push := '1';
           else
             next_program_counter := program_counter;
           end if;
-        when others =>
-          report "unknown opcode " &
-            integer'image(to_integer(opcode))
-            severity warning;
         end case;
         next_cpu_state := instruction_fetch;
         program_counter <= next_program_counter;
@@ -305,21 +367,66 @@ begin
     end if;
   end process sequential;
 
+  instruction_fetch_process: process(clk, rst)
+  begin
+    if rst = '1' then
+    elsif rising_edge(clk) then
+      if cpu_state = instruction_fetch then
+      end if;
+    end if;
+  end process instruction_fetch_process;
+
+  decode_process: process(clk, rst)
+  begin
+    if rst = '1' then
+    elsif rising_edge(clk) then
+      if cpu_state = decode then
+      end if;
+    end if;
+  end process decode_process;
+
+  execute_process: process(clk, rst)
+  begin
+    if rst = '1' then
+    elsif rising_edge(clk) then
+      if cpu_state = memory_access then
+      end if;
+    end if;
+  end process execute_process;
+
+  memory_access_process: process(clk, rst)
+  begin
+    if rst = '1' then
+    elsif rising_edge(clk) then
+      if cpu_state = memory_access then
+      end if;
+    end if;
+  end process memory_access_process;
+
+  writeback_process: process(clk, rst)
+  begin
+    if rst = '1' then
+    elsif rising_edge(clk) then
+      if cpu_state = writeback then
+      end if;
+    end if;
+  end process writeback_process;
+
   alu_controller: process(alu_op, immediate_val)
   begin
     case alu_op is
-    when "00" =>
+    when alu_op_add =>
       alu_control <= "0010";
-    when "01" =>
+    when alu_op_sub =>
       alu_control <= "0110";
-    when "10" =>
+    when alu_op_normal =>
       case immediate_val(5 downto 0) is
       when "100001" =>
         alu_control <= "0010";
       when others =>
         alu_control <= (others => '-');
       end case;
-    when others =>
+    when alu_op_dontcare =>
       alu_control <= (others => '-');
     end case;
   end process alu_controller;
