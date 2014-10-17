@@ -124,6 +124,7 @@ package kakeudon is
   subtype opcode_t is integer range 0 to 63;
   constant OP_SPECIAL : opcode_t := 0;
   constant OP_J : opcode_t := 2;
+  constant OP_JAL : opcode_t := 3;
   constant OP_BEQ : opcode_t := 4;
   constant OP_ADDI : opcode_t := 8;
   constant OP_ADDIU : opcode_t := 9;

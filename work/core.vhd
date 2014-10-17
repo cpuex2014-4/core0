@@ -79,6 +79,7 @@ architecture behavioral of core is
   signal rs_io_mode : rs_io_mode_t;
   type branch_target_t is (branch_target_normal,
                            branch_target_j, branch_target_b,
+                           branch_target_alu,
                            branch_target_dontcare);
   signal branch_target : branch_target_t;
   type alu_op_t is (alu_op_add, alu_op_sub, alu_op_normal, alu_op_dontcare);
@@ -91,6 +92,7 @@ architecture behavioral of core is
     reg_write_source_alu,
     reg_write_source_mem,
     reg_write_source_rs,
+    reg_write_source_pc,
     reg_write_source_dontcare);
   signal reg_write_source : reg_write_source_t;
 begin
@@ -104,7 +106,10 @@ begin
   opcode <= instruction_register(31 downto 26);
   rs_addr <= instruction_register(25 downto 21);
   rt_addr <= instruction_register(20 downto 16);
-  rd_addr <= (others => 'X') when TO_X01(reg_dst) = 'X' else
+  rd_addr <= (others => '-') when
+                reg_write_source = reg_write_source_dontcare else
+             (others => '1') when reg_write_source = reg_write_source_pc else
+             (others => 'X') when TO_X01(reg_dst) = 'X' else
              rd_addr2 when reg_dst = '1' else rd_addr1;
 
   sequential : process(clk, rst)
@@ -226,23 +231,41 @@ begin
             severity warning;
         case opcode_t(to_integer(opcode)) is
         when OP_SPECIAL =>
-          alu_op <= alu_op_normal;
-          if instruction_register(5 downto 2) = "0000" then
-            alu_src_a <= '1';
-          else
+          if instruction_register(5 downto 3) = "001" then
+            alu_op <= alu_op_add;
             alu_src_a <= '0';
+            alu_src_b <= '0';
+            reg_write <= '0';
+            reg_write_source <= reg_write_source_dontcare;
+            rs_io_mode <= rs_io_normal;
+            branch_target <= branch_target_alu;
+          else
+            alu_op <= alu_op_normal;
+            if instruction_register(5 downto 2) = "0000" then
+              alu_src_a <= '1';
+            else
+              alu_src_a <= '0';
+            end if;
+            alu_src_b <= '0';
+            reg_write <= '1';
+            reg_write_source <= reg_write_source_alu;
+            rs_io_mode <= rs_io_normal;
+            branch_target <= branch_target_normal;
           end if;
-          alu_src_b <= '0';
-          reg_write <= '1';
-          reg_write_source <= reg_write_source_alu;
-          rs_io_mode <= rs_io_normal;
-          branch_target <= branch_target_normal;
         when OP_J =>
           alu_op <= alu_op_dontcare;
           alu_src_a <= '-';
           alu_src_b <= '-';
           reg_write <= '0';
           reg_write_source <= reg_write_source_dontcare;
+          rs_io_mode <= rs_io_normal;
+          branch_target <= branch_target_j;
+        when OP_JAL =>
+          alu_op <= alu_op_dontcare;
+          alu_src_a <= '-';
+          alu_src_b <= '-';
+          reg_write <= '1';
+          reg_write_source <= reg_write_source_pc;
           rs_io_mode <= rs_io_normal;
           branch_target <= branch_target_j;
         when OP_BEQ =>
@@ -419,6 +442,8 @@ begin
           rd_val <= mem_data_read;
         when reg_write_source_rs =>
           rd_val <= received_word;
+        when reg_write_source_pc =>
+          rd_val <= program_counter_plus1 & "00";
         when reg_write_source_dontcare =>
           rd_val <= (others => '-');
         end case;
@@ -437,6 +462,9 @@ begin
           else
             program_counter <= program_counter_plus1;
           end if;
+        when branch_target_alu =>
+          -- TODO: alignment check
+          program_counter <= alu_out(31 downto 2);
         when branch_target_dontcare =>
           program_counter <= (others => '-');
         end case;

@@ -48,7 +48,7 @@ begin
           -- else
           --   report "reg write: " &
           --     integer'image(to_integer(gpr_wraddr)) & " " &
-          --     integer'image(to_integer(gpr_wrval));
+          --     integer'image(to_integer(signed(gpr_wrval)));
           -- end if;
           gprs(to_integer(gpr_wraddr)) <= gpr_wrval;
         end if;
