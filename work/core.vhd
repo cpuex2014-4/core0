@@ -29,7 +29,7 @@ entity core is
     rs232c_send_bottom : out unsigned(7 downto 0);
     rs232c_send_push : out std_logic := '0';
     -- ALU
-    alu_control : out unsigned(3 downto 0);
+    alu_control : out unsigned(4 downto 0);
     alu_in0 : out unsigned(31 downto 0);
     alu_in1 : out unsigned(31 downto 0);
     alu_out : in unsigned(31 downto 0);
@@ -83,7 +83,8 @@ architecture behavioral of core is
   signal branch_target : branch_target_t;
   type alu_op_t is (alu_op_add, alu_op_sub, alu_op_normal, alu_op_dontcare);
   signal alu_op : alu_op_t;
-  signal alu_src : std_logic;
+  signal alu_src_a : std_logic;
+  signal alu_src_b : std_logic;
   signal reg_dst : std_logic;
   signal reg_write : std_logic;
   type reg_write_source_t is (
@@ -93,9 +94,12 @@ architecture behavioral of core is
     reg_write_source_dontcare);
   signal reg_write_source : reg_write_source_t;
 begin
-  alu_in0 <= rs_val;
-  alu_in1 <= (others => 'X') when TO_X01(alu_src) = 'X' else
-             immediate_val when alu_src = '1' else rt_val;
+  alu_in0 <= (others => 'X') when TO_X01(alu_src_a) = 'X' else
+             rs_val when alu_src_a = '0' else
+             (31 downto 5 => '0') & immediate_val(10 downto 6);
+  alu_in1 <= (others => 'X') when TO_X01(alu_src_b) = 'X' else
+             rt_val when alu_src_b = '0' else
+             immediate_val;
 
   opcode <= instruction_register(31 downto 26);
   rs_addr <= instruction_register(25 downto 21);
@@ -217,52 +221,74 @@ begin
         else
           immediate_val(31 downto 16) <= (others => '0');
         end if;
+        assert TO_01(opcode, 'X')(0) /= 'X'
+          report "metavalue detected in opcode"
+            severity warning;
         case opcode_t(to_integer(opcode)) is
         when OP_SPECIAL =>
           alu_op <= alu_op_normal;
-          alu_src <= '0';
+          if instruction_register(5 downto 2) = "0000" then
+            alu_src_a <= '1';
+          else
+            alu_src_a <= '0';
+          end if;
+          alu_src_b <= '0';
           reg_write <= '1';
           reg_write_source <= reg_write_source_alu;
           rs_io_mode <= rs_io_normal;
           branch_target <= branch_target_normal;
         when OP_J =>
           alu_op <= alu_op_dontcare;
-          alu_src <= '-';
+          alu_src_a <= '-';
+          alu_src_b <= '-';
           reg_write <= '0';
           reg_write_source <= reg_write_source_dontcare;
           rs_io_mode <= rs_io_normal;
           branch_target <= branch_target_j;
         when OP_BEQ =>
           alu_op <= alu_op_sub;
-          alu_src <= '0';
+          alu_src_a <= '0';
+          alu_src_b <= '0';
           reg_write <= '0';
           reg_write_source <= reg_write_source_dontcare;
           rs_io_mode <= rs_io_normal;
           branch_target <= branch_target_b;
+        when OP_ADDIU =>
+          alu_op <= alu_op_normal;
+          alu_src_a <= '0';
+          alu_src_b <= '1';
+          reg_write <= '1';
+          reg_write_source <= reg_write_source_alu;
+          rs_io_mode <= rs_io_normal;
+          branch_target <= branch_target_normal;
         when OP_LW =>
           alu_op <= alu_op_add;
-          alu_src <= '1';
+          alu_src_a <= '0';
+          alu_src_b <= '1';
           reg_write <= '1';
           reg_write_source <= reg_write_source_mem;
           rs_io_mode <= rs_io_normal;
           branch_target <= branch_target_normal;
         when OP_SW =>
           alu_op <= alu_op_add;
-          alu_src <= '1';
+          alu_src_a <= '0';
+          alu_src_b <= '1';
           reg_write <= '0';
           reg_write_source <= reg_write_source_dontcare;
           rs_io_mode <= rs_io_normal;
           branch_target <= branch_target_normal;
         when OP_RRB =>
           alu_op <= alu_op_add;
-          alu_src <= '1';
+          alu_src_a <= '0';
+          alu_src_b <= '0';
           reg_write <= '1';
           reg_write_source <= reg_write_source_rs;
           rs_io_mode <= rs_io_recv;
           branch_target <= branch_target_normal;
         when OP_RSB =>
           alu_op <= alu_op_add;
-          alu_src <= '0';
+          alu_src_a <= '0';
+          alu_src_b <= '0';
           reg_write <= '0';
           reg_write_source <= reg_write_source_dontcare;
           rs_io_mode <= rs_io_send;
@@ -272,7 +298,8 @@ begin
             integer'image(to_integer(opcode))
             severity warning;
           alu_op <= alu_op_dontcare;
-          alu_src <= '-';
+          alu_src_a <= '-';
+          alu_src_b <= '-';
           reg_write <= '-';
           reg_write_source <= reg_write_source_dontcare;
           rs_io_mode <= rs_io_normal;
@@ -364,6 +391,8 @@ begin
         when rs_io_send =>
           -- send word into RS-232C, blocking
           if rs232c_send_full /= '1' then
+            -- report "sending : " &
+            --   integer'image(to_integer(alu_out(7 downto 0)));
             next_rs232c_send_bottom := alu_out(7 downto 0);
             next_rs232c_send_push := '1';
           end if;
@@ -400,7 +429,10 @@ begin
           program_counter <= program_counter(29 downto 26) &
                              jump_immediate_val;
         when branch_target_b =>
-          if alu_iszero = '1' then
+          if TO_X01(alu_iszero) = 'X' then
+            report "metavalue detected in alu_iszero" severity failure;
+            program_counter <= (others => 'X');
+          elsif alu_iszero = '1' then
             program_counter <= program_counter_plus1_plusimm;
           else
             program_counter <= program_counter_plus1;
@@ -419,16 +451,53 @@ begin
   begin
     case alu_op is
     when alu_op_add =>
-      alu_control <= "0010";
+      alu_control <= "00010";
     when alu_op_sub =>
-      alu_control <= "0110";
+      alu_control <= "00110";
     when alu_op_normal =>
-      case immediate_val(5 downto 0) is
-      when "100001" =>
-        alu_control <= "0010";
-      when others =>
+      if TO_X01(alu_src_b) = 'X' then
         alu_control <= (others => '-');
-      end case;
+      elsif alu_src_b = '1' then
+        case opcode_t(to_integer(opcode)) is
+        when OP_ADDIU =>
+          alu_control <= "00010";
+        when others =>
+          alu_control <= (others => '-');
+        end case;
+      else
+        case immediate_val(5 downto 0) is
+        when "000000" => -- SLL
+          alu_control <= "10000";
+        when "000010" => -- SRL
+          alu_control <= "10010";
+        when "000011" => -- SRA
+          alu_control <= "10011";
+        when "100000" => -- ADD
+          -- TODO error handling
+          alu_control <= "00010";
+        when "100001" => -- ADDU
+          alu_control <= "00010";
+        when "100010" => -- SUB
+          -- TODO error handling
+          alu_control <= "00110";
+        when "100011" => -- SUBU
+          alu_control <= "00110";
+        when "100100" => -- AND
+          alu_control <= "00000";
+        when "100101" => -- OR
+          alu_control <= "00001";
+        when "100110" => -- XOR
+          alu_control <= "11100";
+        when "100111" => -- NOR
+          alu_control <= "01100";
+        when "101010" => -- SLT
+          alu_control <= "00111";
+        when "101011" => -- SLTU
+          alu_control <= "10111";
+        when others =>
+          alu_control <= (others => '-');
+        end case;
+      end if;
     when alu_op_dontcare =>
       alu_control <= (others => '-');
     end case;

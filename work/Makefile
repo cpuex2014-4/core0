@@ -17,7 +17,7 @@ GHDLC = ghdl
 GHDLFLAGS = \
 	-fexplicit --ieee=synopsys --work=$(LIBRARYNAME) \
 	#--std=93
-GHDL_SIM_OPT = --stop-time=1ms
+GHDL_SIM_OPT = --stop-time=15ms
 
 .PHONY: all test clean check-syntax $(TESTBENCHES)
 

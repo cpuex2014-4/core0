@@ -38,8 +38,20 @@ begin
     if rst = '1' then
       gprs <= (others => x"00000000");
     elsif rising_edge(clk) then
-      if gpr_we = '1' and gpr_wraddr /= 0 then
-        gprs(to_integer(gpr_wraddr)) <= gpr_wrval;
+      if gpr_we = '1' then
+        if TO_01(gpr_wraddr, 'X')(0) = 'X' then
+          report "metavalue detected in gpr_wraddr" severity warning;
+        elsif gpr_wraddr /= 0 then
+          -- if TO_01(gpr_wrval, 'X')(0) = 'X' then
+          --   report "reg write: " &
+          --     integer'image(to_integer(gpr_wraddr)) & " X";
+          -- else
+          --   report "reg write: " &
+          --     integer'image(to_integer(gpr_wraddr)) & " " &
+          --     integer'image(to_integer(gpr_wrval));
+          -- end if;
+          gprs(to_integer(gpr_wraddr)) <= gpr_wrval;
+        end if;
       end if;
     end if;
   end process sequential;

@@ -29,7 +29,7 @@ package kakeudon is
       rs232c_send_bottom : out unsigned(7 downto 0);
       rs232c_send_push : out std_logic;
       -- ALU
-      alu_control : out unsigned(3 downto 0);
+      alu_control : out unsigned(4 downto 0);
       alu_in0 : out unsigned(31 downto 0);
       alu_in1 : out unsigned(31 downto 0);
       alu_out : in unsigned(31 downto 0);
@@ -114,7 +114,7 @@ package kakeudon is
 
   component alu is
     port (
-      alu_control : in unsigned(3 downto 0);
+      alu_control : in unsigned(4 downto 0);
       alu_in0 : in unsigned(31 downto 0);
       alu_in1 : in unsigned(31 downto 0);
       alu_out : buffer unsigned(31 downto 0);
@@ -125,6 +125,14 @@ package kakeudon is
   constant OP_SPECIAL : opcode_t := 0;
   constant OP_J : opcode_t := 2;
   constant OP_BEQ : opcode_t := 4;
+  constant OP_ADDI : opcode_t := 8;
+  constant OP_ADDIU : opcode_t := 9;
+  constant OP_SLTI : opcode_t := 10;
+  constant OP_SLTIU : opcode_t := 11;
+  constant OP_ANDI : opcode_t := 12;
+  constant OP_ORI : opcode_t := 13;
+  constant OP_XORI : opcode_t := 14;
+  constant OP_LUI : opcode_t := 15;
   constant OP_LW : opcode_t := 35;
   constant OP_SW : opcode_t := 43;
   constant OP_RRB : opcode_t := 28;

@@ -52,7 +52,7 @@ architecture behavioral of cpu is
   signal rs232c_send_bottom : unsigned(7 downto 0);
   signal rs232c_send_push : std_logic;
 
-  signal alu_control : unsigned(3 downto 0);
+  signal alu_control : unsigned(4 downto 0);
   signal alu_in0 : unsigned(31 downto 0);
   signal alu_in1 : unsigned(31 downto 0);
   signal alu_out : unsigned(31 downto 0);
