@@ -57,6 +57,20 @@ architecture behavioral of cpu is
   signal alu_in1 : unsigned(31 downto 0);
   signal alu_out : unsigned(31 downto 0);
   signal alu_iszero : std_logic;
+
+  signal fs_addr : unsigned(4 downto 0);
+  signal fs_val : unsigned(31 downto 0);
+  signal ft_addr : unsigned(4 downto 0);
+  signal ft_val : unsigned(31 downto 0);
+  signal fd_addr : unsigned(4 downto 0);
+  signal fd_val : unsigned(31 downto 0);
+  signal fpr_we : std_logic;
+
+  signal fpu_control : unsigned(5 downto 0);
+  signal fpu_in0 : unsigned(31 downto 0);
+  signal fpu_in1 : unsigned(31 downto 0);
+  signal fpu_out : unsigned(31 downto 0);
+  signal fpu_condition : std_logic;
 begin
   core_unit : core
   port map (
@@ -83,7 +97,19 @@ begin
     alu_out => alu_out,
     alu_iszero => alu_iszero,
     clk => clk,
-    rst => rst);
+    rst => rst,
+    fs_addr => fs_addr,
+    fs_val => fs_val,
+    ft_addr => ft_addr,
+    ft_val => ft_val,
+    fd_addr => fd_addr,
+    fd_val => fd_val,
+    fpr_we => fpr_we,
+    fpu_control => fpu_control,
+    fpu_in0 => fpu_in0,
+    fpu_in1 => fpu_in1,
+    fpu_out => fpu_out,
+    fpu_condition => fpu_condition);
 
   reg : register_file
   port map (
@@ -96,6 +122,18 @@ begin
     gpr_wraddr => rd_addr,
     gpr_wrval => rd_val,
     gpr_we => gpr_we);
+
+  fp_reg : fp_register_file
+  port map (
+    clk => clk,
+    rst => rst,
+    fpr_rd0addr => fs_addr,
+    fpr_rd0val => fs_val,
+    fpr_rd1addr => ft_addr,
+    fpr_rd1val => ft_val,
+    fpr_wraddr => fd_addr,
+    fpr_wrval => fd_val,
+    fpr_we => fpr_we);
 
   mem : memory_controller
   port map (
@@ -140,5 +178,14 @@ begin
     alu_in1 => alu_in1,
     alu_out => alu_out,
     alu_iszero => alu_iszero);
+
+  fpu_unit : fpu_stub
+  port map (
+    clk => clk,
+    fpu_control => fpu_control,
+    fpu_in0 => fpu_in0,
+    fpu_in1 => fpu_in1,
+    fpu_out => fpu_out,
+    fpu_condition => fpu_condition);
 end behavioral;
 

@@ -4,6 +4,7 @@ LIBRARYNAME = work
 SOURCES = \
 	serial.vhd kakeudon.vhd memory_controller.vhd register_file.vhd \
 	alu.vhd io_rs232c.vhd core.vhd cpu.vhd \
+	fp_register_file.vhd fpu_stub.vhd \
 	sramsim.vhd cpu_tb.vhd
 # SOURCES = \
 # 	serial.vhd cpu.vhd top.vhd \
@@ -17,7 +18,7 @@ GHDLC = ghdl
 GHDLFLAGS = \
 	-fexplicit --ieee=synopsys --work=$(LIBRARYNAME) \
 	#--std=93
-GHDL_SIM_OPT = --stop-time=15ms
+GHDL_SIM_OPT = --stop-time=20ms
 
 .PHONY: all test clean check-syntax $(TESTBENCHES)
 

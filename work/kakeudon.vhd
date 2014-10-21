@@ -34,6 +34,20 @@ package kakeudon is
       alu_in1 : out unsigned(31 downto 0);
       alu_out : in unsigned(31 downto 0);
       alu_iszero : in std_logic;
+      -- Floating-Point Register File
+      fs_addr : out unsigned(4 downto 0);
+      fs_val : in unsigned(31 downto 0);
+      ft_addr : out unsigned(4 downto 0);
+      ft_val : in unsigned(31 downto 0);
+      fd_addr : out unsigned(4 downto 0);
+      fd_val : out unsigned(31 downto 0);
+      fpr_we : out std_logic;
+      -- FPU
+      fpu_control : out unsigned(5 downto 0);
+      fpu_in0 : out unsigned(31 downto 0);
+      fpu_in1 : out unsigned(31 downto 0);
+      fpu_out : in unsigned(31 downto 0);
+      fpu_condition : in std_logic;
       -- Clock And Reset
       clk : in std_logic;
       rst : in std_logic);
@@ -74,6 +88,19 @@ package kakeudon is
       gpr_wrval : in unsigned_word;
       gpr_we : in std_logic);
   end component register_file;
+
+  component fp_register_file is
+    port (
+      clk : in std_logic;
+      rst : in std_logic;
+      fpr_rd0addr : in unsigned(4 downto 0);
+      fpr_rd0val : out unsigned_word;
+      fpr_rd1addr : in unsigned(4 downto 0);
+      fpr_rd1val : out unsigned_word;
+      fpr_wraddr : in unsigned(4 downto 0);
+      fpr_wrval : in unsigned_word;
+      fpr_we : in std_logic);
+  end component fp_register_file;
 
   component memory_controller is
     port (
@@ -121,6 +148,16 @@ package kakeudon is
       alu_iszero : out std_logic);
   end component alu;
 
+  component fpu_stub is
+    port (
+      clk : in std_logic;
+      fpu_control : in unsigned(5 downto 0);
+      fpu_in0 : in unsigned(31 downto 0);
+      fpu_in1 : in unsigned(31 downto 0);
+      fpu_out : out unsigned(31 downto 0);
+      fpu_condition : out std_logic);
+  end component fpu_stub;
+
   subtype opcode_t is integer range 0 to 63;
   constant OP_SPECIAL : opcode_t := 0;
   constant OP_J : opcode_t := 2;
@@ -134,6 +171,7 @@ package kakeudon is
   constant OP_ORI : opcode_t := 13;
   constant OP_XORI : opcode_t := 14;
   constant OP_LUI : opcode_t := 15;
+  constant OP_COP1 : opcode_t := 17;
   constant OP_LW : opcode_t := 35;
   constant OP_SW : opcode_t := 43;
   constant OP_RRB : opcode_t := 28;
