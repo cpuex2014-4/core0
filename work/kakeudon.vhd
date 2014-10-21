@@ -148,16 +148,6 @@ package kakeudon is
       alu_iszero : out std_logic);
   end component alu;
 
-  component fpu_stub is
-    port (
-      clk : in std_logic;
-      fpu_control : in unsigned(5 downto 0);
-      fpu_in0 : in unsigned(31 downto 0);
-      fpu_in1 : in unsigned(31 downto 0);
-      fpu_out : out unsigned(31 downto 0);
-      fpu_condition : out std_logic);
-  end component fpu_stub;
-
   subtype opcode_t is integer range 0 to 63;
   constant OP_SPECIAL : opcode_t := 0;
   constant OP_J : opcode_t := 2;

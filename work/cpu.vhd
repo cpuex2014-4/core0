@@ -4,6 +4,7 @@ use ieee.numeric_std.all;
 
 library work;
 use work.serial.all;
+use work.kakeudon_fpu.all;
 use work.kakeudon.all;
 
 entity cpu is
@@ -179,13 +180,13 @@ begin
     alu_out => alu_out,
     alu_iszero => alu_iszero);
 
-  fpu_unit : fpu_stub
+  fpu_unit : fpucore
   port map (
     clk => clk,
-    fpu_control => fpu_control,
-    fpu_in0 => fpu_in0,
-    fpu_in1 => fpu_in1,
-    fpu_out => fpu_out,
-    fpu_condition => fpu_condition);
+    op => fpu_control,
+    in_1 => fpu_in0,
+    in_2 => fpu_in1,
+    out_1 => fpu_out,
+    cond => fpu_condition);
 end behavioral;
 

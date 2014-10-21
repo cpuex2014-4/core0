@@ -1,18 +1,21 @@
 #!/usr/bin/make -f
 
 LIBRARYNAME = work
-SOURCES = \
+FPU_SOURCES = fadd.vhd feq.vhd fle.vhd flt.vhd fmul.vhd fpu_core.vhd \
+	      ftoi.vhd itof.vhd
+CORE_SOURCES = \
 	serial.vhd kakeudon.vhd memory_controller.vhd register_file.vhd \
 	alu.vhd io_rs232c.vhd core.vhd cpu.vhd \
-	fp_register_file.vhd fpu_stub.vhd \
+	fp_register_file.vhd \
 	sramsim.vhd cpu_tb.vhd
+SOURCES = $(FPU_SOURCES:%=../fpu/VHDL/%) $(CORE_SOURCES)
 # SOURCES = \
 # 	serial.vhd cpu.vhd top.vhd \
 # 	sramsim.vhd cpu_tb.vhd top_tb.vhd
 TESTBENCHES = cpu_tb
 # TESTBENCHES = cpu_tb top_tb
 
-OBJS = $(SOURCES:.vhd=.o)
+OBJS = $(FPU_SOURCES:.vhd=.o) $(CORE_SOURCES:.vhd=.o)
 
 GHDLC = ghdl
 GHDLFLAGS = \
