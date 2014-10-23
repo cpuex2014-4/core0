@@ -37,6 +37,7 @@ test: $(TESTBENCHES)
 
 $(TESTBENCHES): $(OBJS)
 	$(GHDLC) -e $(GHDLFLAGS) $@
+	ruby encode.rb
 	# $(GHDLC) -r $(GHDLFLAGS) $@ $(GHDL_SIM_OPT) --vcd=$@.vcd
 	$(GHDLC) -r $(GHDLFLAGS) $@ $(GHDL_SIM_OPT)
 

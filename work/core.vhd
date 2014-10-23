@@ -29,7 +29,7 @@ entity core is
     rs232c_send_bottom : out unsigned(7 downto 0);
     rs232c_send_push : out std_logic := '0';
     -- ALU
-    alu_control : out unsigned(4 downto 0);
+    alu_control : out unsigned(5 downto 0);
     alu_in0 : out unsigned(31 downto 0);
     alu_in1 : out unsigned(31 downto 0);
     alu_out : in unsigned(31 downto 0);
@@ -96,9 +96,11 @@ architecture behavioral of core is
                            branch_target_alu,
                            branch_target_dontcare);
   signal branch_target : branch_target_t;
-  type alu_op_t is (alu_op_add, alu_op_sub, alu_op_normal, alu_op_dontcare);
-  signal alu_op : alu_op_t;
-  signal alu_src_a : std_logic;
+  signal branch_by_cop1 : std_logic;
+  signal branch_negate : std_logic;
+  type alu_src_a_t is
+    (alu_src_a_rs, alu_src_a_shamt, alu_src_a_16, alu_src_a_dontcare);
+  signal alu_src_a : alu_src_a_t;
   signal alu_src_b : std_logic;
   signal reg_dst : std_logic;
   signal reg_write : std_logic;
@@ -124,9 +126,13 @@ architecture behavioral of core is
     fp_reg_write_source_dontcare);
   signal fp_reg_write_source : fp_reg_write_source_t;
 begin
-  alu_in0 <= (others => 'X') when TO_X01(alu_src_a) = 'X' else
-             rs_val when alu_src_a = '0' else
-             (31 downto 5 => '0') & immediate_val(10 downto 6);
+  alu_in0 <= rs_val when alu_src_a = alu_src_a_rs else
+             to_unsigned(16, alu_in0'length)
+               when alu_src_a = alu_src_a_16 else
+             (31 downto 5 => '0') & immediate_val(10 downto 6)
+               when alu_src_a = alu_src_a_shamt else
+             (others => 'X');
+
   alu_in1 <= (others => 'X') when TO_X01(alu_src_b) = 'X' else
              rt_val when alu_src_b = '0' else
              immediate_val;
@@ -155,7 +161,8 @@ begin
       cpu_state <= program_loading;
     elsif rising_edge(clk) then
       -- assert cpu_state = program_loading or cpu_state = memory_access_0
-      --   report "cpu_state = " & cpu_state_t'image(cpu_state);
+      --   report "cpu_state = " & cpu_state_t'image(cpu_state)
+      --     severity note;
       next_cpu_state := cpu_state;
       case cpu_state is
       when program_loading =>
@@ -171,7 +178,7 @@ begin
       when execute =>
         assert TO_01(opcode, 'X')(0) /= 'X'
           report "metavalue detected in opcode"
-            severity warning;
+            severity failure;
         case opcode_t(to_integer(opcode)) is
         when OP_LW =>
           next_cpu_state := memory_access_0;
@@ -215,7 +222,7 @@ begin
       if cpu_state = instruction_fetch then
         assert TO_01(program_counter, 'X')(0) /= 'X'
           report "metavalue detected in program_counter"
-            severity warning;
+            severity failure;
         instruction_register <=
           instruction_memory(to_integer(program_counter(9 downto 0)));
         program_counter_plus1 <=
@@ -226,6 +233,19 @@ begin
 
   decode_process: process(clk, rst)
     variable imm_signext : std_logic;
+    variable next_alu_control : unsigned(5 downto 0);
+    variable next_alu_src_a : alu_src_a_t;
+    variable next_alu_src_b : std_logic;
+    variable next_reg_write : std_logic;
+    variable next_reg_write_source : reg_write_source_t;
+    variable next_fpu_op : fpu_op_t;
+    variable next_fp_reg_write : std_logic;
+    variable next_fp_reg_dst : std_logic;
+    variable next_fp_reg_write_source : fp_reg_write_source_t;
+    variable next_rs_io_mode : rs_io_mode_t;
+    variable next_branch_target : branch_target_t;
+    variable next_branch_by_cop1 : std_logic;
+    variable next_branch_negate : std_logic;
   begin
     if rst = '1' then
     elsif rising_edge(clk) then
@@ -234,7 +254,7 @@ begin
           report "metavalue detected in instruction_register; " &
                  "program_counter = " &
                  integer'image(to_integer(program_counter))
-            severity warning;
+            severity failure;
         rd_addr1 <= instruction_register(20 downto 16);
         rd_addr2 <= instruction_register(15 downto 11);
         fd_addr1 <= instruction_register(10 downto 6);
@@ -265,278 +285,203 @@ begin
         else
           immediate_val(31 downto 16) <= (others => '0');
         end if;
+        next_alu_control := (others => '-');
+        next_alu_src_a := alu_src_a_dontcare;
+        next_alu_src_b := '-';
+        next_reg_write := '0';
+        next_reg_write_source := reg_write_source_dontcare;
+        next_fpu_op := fpu_op_dontcare;
+        next_fp_reg_write := '0';
+        next_fp_reg_dst := '-';
+        next_fp_reg_write_source := fp_reg_write_source_dontcare;
+        next_rs_io_mode := rs_io_normal;
+        next_branch_target := branch_target_normal;
+        next_branch_by_cop1 := '-';
+        next_branch_negate := '-';
         assert TO_01(opcode, 'X')(0) /= 'X'
           report "metavalue detected in opcode"
-            severity warning;
+            severity failure;
         case opcode_t(to_integer(opcode)) is
         when OP_SPECIAL =>
           if instruction_register(5 downto 3) = "001" then
-            alu_op <= alu_op_add;
-            alu_src_a <= '0';
-            alu_src_b <= '0';
-            reg_write <= '0';
-            reg_write_source <= reg_write_source_dontcare;
-            fpu_op <= fpu_op_dontcare;
-            fp_reg_write <= '0';
-            fp_reg_dst <= '-';
-            fp_reg_write_source <= fp_reg_write_source_dontcare;
-            rs_io_mode <= rs_io_normal;
-            branch_target <= branch_target_alu;
+            next_alu_control := to_unsigned(FUNCT_ADDU, alu_control'length);
+            next_alu_src_a := alu_src_a_rs;
+            next_alu_src_b := '0';
+            next_branch_target := branch_target_alu;
           else
-            alu_op <= alu_op_normal;
+            next_alu_control := instruction_register(5 downto 0);
             if instruction_register(5 downto 2) = "0000" then
-              alu_src_a <= '1';
+              next_alu_src_a := alu_src_a_shamt;
             else
-              alu_src_a <= '0';
+              next_alu_src_a := alu_src_a_rs;
             end if;
-            alu_src_b <= '0';
-            reg_write <= '1';
-            reg_write_source <= reg_write_source_alu;
-            fpu_op <= fpu_op_dontcare;
-            fp_reg_write <= '0';
-            fp_reg_dst <= '-';
-            fp_reg_write_source <= fp_reg_write_source_dontcare;
-            rs_io_mode <= rs_io_normal;
-            branch_target <= branch_target_normal;
+            next_alu_src_b := '0';
+            next_reg_write := '1';
+            next_reg_write_source := reg_write_source_alu;
           end if;
         when OP_J =>
-          alu_op <= alu_op_dontcare;
-          alu_src_a <= '-';
-          alu_src_b <= '-';
-          reg_write <= '0';
-          reg_write_source <= reg_write_source_dontcare;
-          fpu_op <= fpu_op_dontcare;
-          fp_reg_write <= '0';
-          fp_reg_dst <= '-';
-          fp_reg_write_source <= fp_reg_write_source_dontcare;
-          rs_io_mode <= rs_io_normal;
-          branch_target <= branch_target_j;
+          next_branch_target := branch_target_j;
         when OP_JAL =>
-          alu_op <= alu_op_dontcare;
-          alu_src_a <= '-';
-          alu_src_b <= '-';
-          reg_write <= '1';
-          reg_write_source <= reg_write_source_pc;
-          fpu_op <= fpu_op_dontcare;
-          fp_reg_write <= '0';
-          fp_reg_dst <= '-';
-          fp_reg_write_source <= fp_reg_write_source_dontcare;
-          rs_io_mode <= rs_io_normal;
-          branch_target <= branch_target_j;
+          next_reg_write := '1';
+          next_reg_write_source := reg_write_source_pc;
+          next_branch_target := branch_target_j;
         when OP_BEQ =>
-          alu_op <= alu_op_sub;
-          alu_src_a <= '0';
-          alu_src_b <= '0';
-          reg_write <= '0';
-          reg_write_source <= reg_write_source_dontcare;
-          fpu_op <= fpu_op_dontcare;
-          fp_reg_write <= '0';
-          fp_reg_dst <= '-';
-          fp_reg_write_source <= fp_reg_write_source_dontcare;
-          rs_io_mode <= rs_io_normal;
-          branch_target <= branch_target_b;
+          next_alu_control := to_unsigned(FUNCT_SUBU, alu_control'length);
+          next_alu_src_a := alu_src_a_rs;
+          next_alu_src_b := '0';
+          next_branch_target := branch_target_b;
+          next_branch_by_cop1 := '0';
+          next_branch_negate := '0';
+        when OP_BNE =>
+          next_alu_control := to_unsigned(FUNCT_SUBU, alu_control'length);
+          next_alu_src_a := alu_src_a_rs;
+          next_alu_src_b := '0';
+          next_branch_target := branch_target_b;
+          next_branch_by_cop1 := '0';
+          next_branch_negate := '1';
+        when OP_ADDI =>
+          next_alu_control := to_unsigned(FUNCT_ADD, alu_control'length);
+          next_alu_src_a := alu_src_a_rs;
+          next_alu_src_b := '1';
+          next_reg_write := '1';
+          next_reg_write_source := reg_write_source_alu;
         when OP_ADDIU =>
-          alu_op <= alu_op_normal;
-          alu_src_a <= '0';
-          alu_src_b <= '1';
-          reg_write <= '1';
-          reg_write_source <= reg_write_source_alu;
-          fpu_op <= fpu_op_dontcare;
-          fp_reg_write <= '0';
-          fp_reg_dst <= '-';
-          fp_reg_write_source <= fp_reg_write_source_dontcare;
-          rs_io_mode <= rs_io_normal;
-          branch_target <= branch_target_normal;
+          next_alu_control := to_unsigned(FUNCT_ADDU, alu_control'length);
+          next_alu_src_a := alu_src_a_rs;
+          next_alu_src_b := '1';
+          next_reg_write := '1';
+          next_reg_write_source := reg_write_source_alu;
+        when OP_SLTI =>
+          next_alu_control := to_unsigned(FUNCT_SLT, alu_control'length);
+          next_alu_src_a := alu_src_a_rs;
+          next_alu_src_b := '1';
+          next_reg_write := '1';
+          next_reg_write_source := reg_write_source_alu;
+        when OP_SLTIU =>
+          next_alu_control := to_unsigned(FUNCT_SLTU, alu_control'length);
+          next_alu_src_a := alu_src_a_rs;
+          next_alu_src_b := '1';
+          next_reg_write := '1';
+          next_reg_write_source := reg_write_source_alu;
+        when OP_ORI =>
+          next_alu_control := to_unsigned(FUNCT_OR, alu_control'length);
+          next_alu_src_a := alu_src_a_rs;
+          next_alu_src_b := '1';
+          next_reg_write := '1';
+          next_reg_write_source := reg_write_source_alu;
+        when OP_XORI =>
+          next_alu_control := to_unsigned(FUNCT_XOR, alu_control'length);
+          next_alu_src_a := alu_src_a_rs;
+          next_alu_src_b := '1';
+          next_reg_write := '1';
+          next_reg_write_source := reg_write_source_alu;
+        when OP_LUI =>
+          next_alu_control := to_unsigned(FUNCT_SLL, alu_control'length);
+          next_alu_src_a := alu_src_a_16;
+          next_alu_src_b := '1';
+          next_reg_write := '1';
+          next_reg_write_source := reg_write_source_alu;
         when OP_COP1 =>
           case instruction_register(25 downto 21) is
           when "00000" => -- MFC1
-            alu_op <= alu_op_dontcare;
-            alu_src_a <= '-';
-            alu_src_b <= '-';
-            reg_write <= '1';
-            reg_write_source <= reg_write_source_fpr;
-            fpu_op <= fpu_op_dontcare;
-            fp_reg_write <= '0';
-            fp_reg_dst <= '-';
-            fp_reg_write_source <= fp_reg_write_source_dontcare;
-            rs_io_mode <= rs_io_normal;
-            branch_target <= branch_target_normal;
+            next_reg_write := '1';
+            next_reg_write_source := reg_write_source_fpr;
           when "00100" => -- MTC1
-            alu_op <= alu_op_dontcare;
-            alu_src_a <= '-';
-            alu_src_b <= '-';
-            reg_write <= '0';
-            reg_write_source <= reg_write_source_dontcare;
-            fpu_op <= fpu_op_dontcare;
-            fp_reg_write <= '1';
-            fp_reg_dst <= '1';
-            fp_reg_write_source <= fp_reg_write_source_gpr;
-            rs_io_mode <= rs_io_normal;
-            branch_target <= branch_target_normal;
+            next_fp_reg_write := '1';
+            next_fp_reg_dst := '1';
+            next_fp_reg_write_source := fp_reg_write_source_gpr;
           when "10000" => -- Single-precision
             case instruction_register(5 downto 0) is
             when "000000" => -- add.s
-              alu_op <= alu_op_dontcare;
-              alu_src_a <= '-';
-              alu_src_b <= '-';
-              reg_write <= '-';
-              reg_write_source <= reg_write_source_dontcare;
-              fpu_op <= fpu_op_normal;
-              fp_reg_write <= '1';
-              fp_reg_dst <= '0';
-              fp_reg_write_source <= fp_reg_write_source_fpu;
-              rs_io_mode <= rs_io_normal;
-              branch_target <= branch_target_normal;
+              next_fpu_op := fpu_op_normal;
+              next_fp_reg_write := '1';
+              next_fp_reg_dst := '0';
+              next_fp_reg_write_source := fp_reg_write_source_fpu;
             when "000110" => -- mov.s
-              alu_op <= alu_op_dontcare;
-              alu_src_a <= '-';
-              alu_src_b <= '-';
-              reg_write <= '-';
-              reg_write_source <= reg_write_source_dontcare;
-              fpu_op <= fpu_op_dontcare;
-              fp_reg_write <= '1';
-              fp_reg_dst <= '0';
-              fp_reg_write_source <= fp_reg_write_source_fs;
-              rs_io_mode <= rs_io_normal;
-              branch_target <= branch_target_normal;
+              -- TODO
+              -- fpu_op <= fpu_op_dontcare;
+              next_fp_reg_write := '1';
+              next_fp_reg_dst := '0';
+              next_fp_reg_write_source := fp_reg_write_source_fs;
             when "100100" => -- cvt.w.s
-              alu_op <= alu_op_dontcare;
-              alu_src_a <= '-';
-              alu_src_b <= '-';
-              reg_write <= '-';
-              reg_write_source <= reg_write_source_dontcare;
-              fpu_op <= fpu_op_normal;
-              fp_reg_write <= '1';
-              fp_reg_dst <= '0';
-              fp_reg_write_source <= fp_reg_write_source_fpu;
-              rs_io_mode <= rs_io_normal;
-              branch_target <= branch_target_normal;
+              next_fpu_op := fpu_op_normal;
+              next_fp_reg_write := '1';
+              next_fp_reg_dst := '0';
+              next_fp_reg_write_source := fp_reg_write_source_fpu;
             when others =>
               report "fp_inst.s : unknown funct " &
                 integer'image(to_integer(instruction_register(5 downto 0)))
-                severity warning;
-              alu_op <= alu_op_dontcare;
-              alu_src_a <= '-';
-              alu_src_b <= '-';
-              reg_write <= '-';
-              reg_write_source <= reg_write_source_dontcare;
-              fpu_op <= fpu_op_dontcare;
-              fp_reg_write <= '-';
-              fp_reg_dst <= '-';
-              fp_reg_write_source <= fp_reg_write_source_dontcare;
-              rs_io_mode <= rs_io_normal;
-              branch_target <= branch_target_dontcare;
+                severity failure;
+              next_reg_write := '-';
+              next_fp_reg_write := '-';
+              next_branch_target := branch_target_dontcare;
             end case;
           when "10100" => -- Fixed-point Word
             case instruction_register(5 downto 0) is
             when "100000" => -- cvt.s.w
-              alu_op <= alu_op_dontcare;
-              alu_src_a <= '-';
-              alu_src_b <= '-';
-              reg_write <= '-';
-              reg_write_source <= reg_write_source_dontcare;
-              fpu_op <= fpu_op_normal;
-              fp_reg_write <= '1';
-              fp_reg_dst <= '0';
-              fp_reg_write_source <= fp_reg_write_source_fpu;
-              rs_io_mode <= rs_io_normal;
-              branch_target <= branch_target_normal;
+              next_fpu_op := fpu_op_normal;
+              next_fp_reg_write := '1';
+              next_fp_reg_dst := '0';
+              next_fp_reg_write_source := fp_reg_write_source_fpu;
             when others =>
-              report "fp_inst.s : unknown funct " &
+              report "fp_inst.w : unknown funct " &
                 integer'image(to_integer(instruction_register(5 downto 0)))
-                severity warning;
-              alu_op <= alu_op_dontcare;
-              alu_src_a <= '-';
-              alu_src_b <= '-';
-              reg_write <= '-';
-              reg_write_source <= reg_write_source_dontcare;
-              fpu_op <= fpu_op_dontcare;
-              fp_reg_write <= '-';
-              fp_reg_dst <= '-';
-              fp_reg_write_source <= fp_reg_write_source_dontcare;
-              rs_io_mode <= rs_io_normal;
-              branch_target <= branch_target_dontcare;
+                severity failure;
+              next_reg_write := '-';
+              next_fp_reg_write := '-';
+              next_branch_target := branch_target_dontcare;
             end case;
           when others =>
             report "COP1 : unknown fmt " &
               integer'image(to_integer(instruction_register(25 downto 21)))
-              severity warning;
-            alu_op <= alu_op_dontcare;
-            alu_src_a <= '-';
-            alu_src_b <= '-';
-            reg_write <= '-';
-            reg_write_source <= reg_write_source_dontcare;
-            fpu_op <= fpu_op_dontcare;
-            fp_reg_write <= '-';
-            fp_reg_dst <= '-';
-            fp_reg_write_source <= fp_reg_write_source_dontcare;
-            rs_io_mode <= rs_io_normal;
-            branch_target <= branch_target_dontcare;
+              severity failure;
+            next_reg_write := '-';
+            next_fp_reg_write := '-';
+            next_branch_target := branch_target_dontcare;
           end case;
         when OP_LW =>
-          alu_op <= alu_op_add;
-          alu_src_a <= '0';
-          alu_src_b <= '1';
-          reg_write <= '1';
-          reg_write_source <= reg_write_source_mem;
-          fpu_op <= fpu_op_dontcare;
-          fp_reg_write <= '0';
-          fp_reg_dst <= '-';
-          fp_reg_write_source <= fp_reg_write_source_dontcare;
-          rs_io_mode <= rs_io_normal;
-          branch_target <= branch_target_normal;
+          next_alu_control := to_unsigned(FUNCT_ADDU, alu_control'length);
+          next_alu_src_a := alu_src_a_rs;
+          next_alu_src_b := '1';
+          next_reg_write := '1';
+          next_reg_write_source := reg_write_source_mem;
         when OP_SW =>
-          alu_op <= alu_op_add;
-          alu_src_a <= '0';
-          alu_src_b <= '1';
-          reg_write <= '0';
-          reg_write_source <= reg_write_source_dontcare;
-          fpu_op <= fpu_op_dontcare;
-          fp_reg_write <= '0';
-          fp_reg_dst <= '-';
-          fp_reg_write_source <= fp_reg_write_source_dontcare;
-          rs_io_mode <= rs_io_normal;
-          branch_target <= branch_target_normal;
+          next_alu_control := to_unsigned(FUNCT_ADDU, alu_control'length);
+          next_alu_src_a := alu_src_a_rs;
+          next_alu_src_b := '1';
         when OP_RRB =>
-          alu_op <= alu_op_add;
-          alu_src_a <= '0';
-          alu_src_b <= '0';
-          reg_write <= '1';
-          reg_write_source <= reg_write_source_rs;
-          fpu_op <= fpu_op_dontcare;
-          fp_reg_write <= '0';
-          fp_reg_dst <= '-';
-          fp_reg_write_source <= fp_reg_write_source_dontcare;
-          rs_io_mode <= rs_io_recv;
-          branch_target <= branch_target_normal;
+          next_alu_control := to_unsigned(FUNCT_ADDU, alu_control'length);
+          next_alu_src_a := alu_src_a_rs;
+          next_alu_src_b := '0';
+          next_reg_write := '1';
+          next_reg_write_source := reg_write_source_rs;
+          next_rs_io_mode := rs_io_recv;
         when OP_RSB =>
-          alu_op <= alu_op_add;
-          alu_src_a <= '0';
-          alu_src_b <= '0';
-          reg_write <= '0';
-          reg_write_source <= reg_write_source_dontcare;
-          fpu_op <= fpu_op_dontcare;
-          fp_reg_write <= '0';
-          fp_reg_dst <= '-';
-          fp_reg_write_source <= fp_reg_write_source_dontcare;
-          rs_io_mode <= rs_io_send;
-          branch_target <= branch_target_normal;
+          next_alu_control := to_unsigned(FUNCT_ADDU, alu_control'length);
+          next_alu_src_a := alu_src_a_rs;
+          next_alu_src_b := '0';
+          next_rs_io_mode := rs_io_send;
         when others =>
           report "unknown opcode " &
             integer'image(to_integer(opcode))
-            severity warning;
-          alu_op <= alu_op_dontcare;
-          alu_src_a <= '-';
-          alu_src_b <= '-';
-          reg_write <= '-';
-          reg_write_source <= reg_write_source_dontcare;
-          fpu_op <= fpu_op_dontcare;
-          fp_reg_write <= '-';
-          fp_reg_dst <= '-';
-          fp_reg_write_source <= fp_reg_write_source_dontcare;
-          rs_io_mode <= rs_io_normal;
-          branch_target <= branch_target_dontcare;
+            severity failure;
+          next_reg_write := '-';
+          next_fp_reg_write := '-';
+          next_branch_target := branch_target_dontcare;
         end case;
+        alu_control <= next_alu_control;
+        alu_src_a <= next_alu_src_a;
+        alu_src_b <= next_alu_src_b;
+        reg_write <= next_reg_write;
+        reg_write_source <= next_reg_write_source;
+        fpu_op <= next_fpu_op;
+        fp_reg_write <= next_fp_reg_write;
+        fp_reg_dst <= next_fp_reg_dst;
+        fp_reg_write_source <= next_fp_reg_write_source;
+        rs_io_mode <= next_rs_io_mode;
+        branch_target <= next_branch_target;
+        branch_by_cop1 <= next_branch_by_cop1;
+        branch_negate <= next_branch_negate;
       end if;
     end if;
   end process decode_process;
@@ -548,7 +493,7 @@ begin
       if cpu_state = execute then
         assert TO_01(opcode, 'X')(0) /= 'X'
           report "metavalue detected in opcode"
-            severity warning;
+            severity failure;
         case opcode_t(to_integer(opcode)) is
         when OP_LW =>
           -- TODO memory alignment check
@@ -669,10 +614,15 @@ begin
           if TO_X01(alu_iszero) = 'X' then
             report "metavalue detected in alu_iszero" severity failure;
             program_counter <= (others => 'X');
-          elsif alu_iszero = '1' then
-            program_counter <= program_counter_plus1_plusimm;
+          elsif TO_X01(branch_negate) = 'X' then
+            report "metavalue detected in branch_negate" severity failure;
+            program_counter <= (others => 'X');
           else
-            program_counter <= program_counter_plus1;
+            if (alu_iszero xor branch_negate) = '1' then
+              program_counter <= program_counter_plus1_plusimm;
+            else
+              program_counter <= program_counter_plus1;
+            end if;
           end if;
         when branch_target_alu =>
           -- TODO: alignment check
@@ -702,62 +652,6 @@ begin
       end if;
     end if;
   end process writeback_process;
-
-  alu_controller: process(alu_op, alu_src_a, alu_src_b, opcode, immediate_val)
-  begin
-    case alu_op is
-    when alu_op_add =>
-      alu_control <= "00010";
-    when alu_op_sub =>
-      alu_control <= "00110";
-    when alu_op_normal =>
-      if TO_X01(alu_src_b) = 'X' then
-        alu_control <= (others => '-');
-      elsif alu_src_b = '1' then
-        case opcode_t(to_integer(opcode)) is
-        when OP_ADDIU =>
-          alu_control <= "00010";
-        when others =>
-          alu_control <= (others => '-');
-        end case;
-      else
-        case immediate_val(5 downto 0) is
-        when "000000" => -- SLL
-          alu_control <= "10000";
-        when "000010" => -- SRL
-          alu_control <= "10010";
-        when "000011" => -- SRA
-          alu_control <= "10011";
-        when "100000" => -- ADD
-          -- TODO error handling
-          alu_control <= "00010";
-        when "100001" => -- ADDU
-          alu_control <= "00010";
-        when "100010" => -- SUB
-          -- TODO error handling
-          alu_control <= "00110";
-        when "100011" => -- SUBU
-          alu_control <= "00110";
-        when "100100" => -- AND
-          alu_control <= "00000";
-        when "100101" => -- OR
-          alu_control <= "00001";
-        when "100110" => -- XOR
-          alu_control <= "11100";
-        when "100111" => -- NOR
-          alu_control <= "01100";
-        when "101010" => -- SLT
-          alu_control <= "00111";
-        when "101011" => -- SLTU
-          alu_control <= "10111";
-        when others =>
-          alu_control <= (others => '-');
-        end case;
-      end if;
-    when alu_op_dontcare =>
-      alu_control <= (others => '-');
-    end case;
-  end process alu_controller;
 
   fpu_controller: process(fpu_op)
   begin
