@@ -1,7 +1,9 @@
 #!/usr/bin/make -f
 
 LIBRARYNAME = work
-FPU_SOURCES = fadd.vhd feq.vhd fle.vhd flt.vhd fmul.vhd fpu_core.vhd \
+FPU_SOURCES = fadd.vhd feq.vhd fle.vhd flt.vhd \
+	      fmul_stage1.vhd fmul_stage2.vhd \
+	      fmul.vhd fpu_core.vhd \
 	      ftoi.vhd itof.vhd
 CORE_SOURCES = \
 	serial.vhd kakeudon.vhd memory_controller.vhd register_file.vhd \
@@ -20,6 +22,7 @@ OBJS = $(FPU_SOURCES:.vhd=.o) $(CORE_SOURCES:.vhd=.o)
 GHDLC = ghdl
 GHDLFLAGS = \
 	-fexplicit --ieee=synopsys --work=$(LIBRARYNAME) \
+	--mb-comments \
 	#--std=93
 GHDL_SIM_OPT = --stop-time=20ms
 
