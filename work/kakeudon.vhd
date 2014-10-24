@@ -187,4 +187,25 @@ package kakeudon is
   constant FUNCT_NOR  : funct_t := 2#100111#;
   constant FUNCT_SLT  : funct_t := 2#101010#;
   constant FUNCT_SLTU : funct_t := 2#101011#;
+
+  subtype cop1_fmt_t is integer range 0 to 31;
+  constant COP1_FMT_MFC1 : cop1_fmt_t := 2#00000#;
+  constant COP1_FMT_MTC1 : cop1_fmt_t := 2#00100#;
+  constant COP1_FMT_BC   : cop1_fmt_t := 2#01000#;
+  constant COP1_FMT_S    : cop1_fmt_t := 2#10000#;
+  constant COP1_FMT_D    : cop1_fmt_t := 2#10001#;
+  constant COP1_FMT_W    : cop1_fmt_t := 2#10100#;
+  constant COP1_FMT_L    : cop1_fmt_t := 2#10101#;
+
+  subtype cop1_funct_t is integer range 0 to 63;
+  constant COP1_FUNCT_ADD   : cop1_funct_t := 2#000000#;
+  constant COP1_FUNCT_SUB   : cop1_funct_t := 2#000001#;
+  constant COP1_FUNCT_MUL   : cop1_funct_t := 2#000010#;
+  constant COP1_FUNCT_DIV   : cop1_funct_t := 2#000011#;
+  constant COP1_FUNCT_MOV   : cop1_funct_t := 2#000110#;
+  constant COP1_FUNCT_CVT_S : cop1_funct_t := 2#100000#;
+  constant COP1_FUNCT_CVT_W : cop1_funct_t := 2#100100#;
+  constant COP1_FUNCT_C_EQ  : cop1_funct_t := 2#110010#;
+  constant COP1_FUNCT_C_OLT : cop1_funct_t := 2#110100#;
+  constant COP1_FUNCT_C_OLE : cop1_funct_t := 2#110110#;
 end package kakeudon;

@@ -59,10 +59,13 @@ architecture behavioral of core is
     instruction_fetch,
     decode,
     execute,
+    stall,
     memory_access_0,
     memory_access_1,
     writeback);
+  subtype stall_length_t is integer range 0 to 3;
   signal cpu_state : cpu_state_t := program_loading;
+  signal cpu_stall_count : stall_length_t;
 
   signal loading_counter : unsigned(29 downto 0) := (others => '0');
   signal loading_word : unsigned(31 downto 0);
@@ -113,6 +116,8 @@ architecture behavioral of core is
     reg_write_source_dontcare);
   signal reg_write_source : reg_write_source_t;
 
+  signal fp_cond : std_logic;
+
   type fpu_op_t is (fpu_op_normal, fpu_op_dontcare);
   signal fpu_op : fpu_op_t;
   signal fd_addr1 : unsigned(4 downto 0);
@@ -125,6 +130,9 @@ architecture behavioral of core is
     fp_reg_write_source_fpu,
     fp_reg_write_source_dontcare);
   signal fp_reg_write_source : fp_reg_write_source_t;
+  signal fp_cond_write : std_logic;
+
+  signal cpu_stall_length : stall_length_t;
 begin
   alu_in0 <= rs_val when alu_src_a = alu_src_a_rs else
              to_unsigned(16, alu_in0'length)
@@ -146,8 +154,11 @@ begin
              (others => 'X') when TO_X01(reg_dst) = 'X' else
              rd_addr2 when reg_dst = '1' else rd_addr1;
 
-  fpu_in0 <= ft_val;
-  fpu_in1 <= fs_val;
+  -- fpu_in0 <= ft_val;
+  -- fpu_in1 <= fs_val;
+  -- TODO: metavalue
+  fpu_in0 <= (others => '1') when TO_01(fs_val, 'X')(0) = 'X' else fs_val;
+  fpu_in1 <= (others => '1') when TO_01(ft_val, 'X')(0) = 'X' else ft_val;
 
   fs_addr <= instruction_register(15 downto 11);
   ft_addr <= instruction_register(20 downto 16);
@@ -156,6 +167,7 @@ begin
 
   sequential : process(clk, rst)
     variable next_cpu_state : cpu_state_t;
+    variable next_cpu_stall_count : stall_length_t;
   begin
     if rst = '1' then
       cpu_state <= program_loading;
@@ -164,6 +176,7 @@ begin
       --   report "cpu_state = " & cpu_state_t'image(cpu_state)
       --     severity note;
       next_cpu_state := cpu_state;
+      next_cpu_stall_count := 0;
       case cpu_state is
       when program_loading =>
         if load_pos = 0 then
@@ -189,8 +202,20 @@ begin
         when OP_RSB =>
           next_cpu_state := memory_access_0;
         when others =>
-          next_cpu_state := writeback;
+          if cpu_stall_length = 0 then
+            next_cpu_state := writeback;
+          else
+            next_cpu_state := stall;
+            next_cpu_stall_count := cpu_stall_length - 1;
+          end if;
         end case;
+      when stall =>
+        if cpu_stall_count = 0 then
+          next_cpu_state := writeback;
+        else
+          next_cpu_state := stall;
+          next_cpu_stall_count := cpu_stall_count - 1;
+        end if;
       when memory_access_0 =>
         case rs_io_mode is
         when rs_io_normal =>
@@ -212,6 +237,7 @@ begin
         next_cpu_state := instruction_fetch;
       end case;
       cpu_state <= next_cpu_state after 1 ns;
+      cpu_stall_count <= next_cpu_stall_count after 1 ns;
     end if;
   end process sequential;
 
@@ -223,6 +249,8 @@ begin
         assert TO_01(program_counter, 'X')(0) /= 'X'
           report "metavalue detected in program_counter"
             severity failure;
+        -- report "program_counter/4 = " &
+        --   integer'image(to_integer(program_counter(9 downto 0)));
         instruction_register <=
           instruction_memory(to_integer(program_counter(9 downto 0)));
         program_counter_plus1 <=
@@ -242,10 +270,12 @@ begin
     variable next_fp_reg_write : std_logic;
     variable next_fp_reg_dst : std_logic;
     variable next_fp_reg_write_source : fp_reg_write_source_t;
+    variable next_fp_cond_write : std_logic;
     variable next_rs_io_mode : rs_io_mode_t;
     variable next_branch_target : branch_target_t;
     variable next_branch_by_cop1 : std_logic;
     variable next_branch_negate : std_logic;
+    variable next_cpu_stall_length : stall_length_t;
   begin
     if rst = '1' then
     elsif rising_edge(clk) then
@@ -294,10 +324,12 @@ begin
         next_fp_reg_write := '0';
         next_fp_reg_dst := '-';
         next_fp_reg_write_source := fp_reg_write_source_dontcare;
+        next_fp_cond_write := '0';
         next_rs_io_mode := rs_io_normal;
         next_branch_target := branch_target_normal;
         next_branch_by_cop1 := '-';
         next_branch_negate := '-';
+        next_cpu_stall_length := 0;
         assert TO_01(opcode, 'X')(0) /= 'X'
           report "metavalue detected in opcode"
             severity failure;
@@ -382,32 +414,61 @@ begin
           next_reg_write := '1';
           next_reg_write_source := reg_write_source_alu;
         when OP_COP1 =>
-          case instruction_register(25 downto 21) is
-          when "00000" => -- MFC1
+          case cop1_fmt_t(
+                to_integer(instruction_register(25 downto 21))) is
+          when COP1_FMT_MFC1 => -- MFC1
             next_reg_write := '1';
             next_reg_write_source := reg_write_source_fpr;
-          when "00100" => -- MTC1
+          when COP1_FMT_MTC1 => -- MTC1
             next_fp_reg_write := '1';
             next_fp_reg_dst := '1';
             next_fp_reg_write_source := fp_reg_write_source_gpr;
-          when "10000" => -- Single-precision
-            case instruction_register(5 downto 0) is
-            when "000000" => -- add.s
+          when COP1_FMT_BC => -- BC1F/BC1T
+            next_branch_target := branch_target_b;
+            next_branch_by_cop1 := '1';
+            next_branch_negate := not instruction_register(16);
+          when COP1_FMT_S => -- Single-precision
+            case cop1_funct_t(
+                  to_integer(instruction_register(5 downto 0))) is
+            when COP1_FUNCT_ADD => -- add.s
               next_fpu_op := fpu_op_normal;
               next_fp_reg_write := '1';
               next_fp_reg_dst := '0';
               next_fp_reg_write_source := fp_reg_write_source_fpu;
-            when "000110" => -- mov.s
+              next_cpu_stall_length := 1;
+            when COP1_FUNCT_SUB => -- sub.s
+              next_fpu_op := fpu_op_normal;
+              next_fp_reg_write := '1';
+              next_fp_reg_dst := '0';
+              next_fp_reg_write_source := fp_reg_write_source_fpu;
+              next_cpu_stall_length := 1;
+            when COP1_FUNCT_MUL => -- mul.s
+              next_fpu_op := fpu_op_normal;
+              next_fp_reg_write := '1';
+              next_fp_reg_dst := '0';
+              next_fp_reg_write_source := fp_reg_write_source_fpu;
+              next_cpu_stall_length := 1;
+            when COP1_FUNCT_MOV => -- mov.s
               -- TODO
               -- fpu_op <= fpu_op_dontcare;
               next_fp_reg_write := '1';
               next_fp_reg_dst := '0';
               next_fp_reg_write_source := fp_reg_write_source_fs;
-            when "100100" => -- cvt.w.s
+            when COP1_FUNCT_CVT_W => -- cvt.w.s
               next_fpu_op := fpu_op_normal;
               next_fp_reg_write := '1';
               next_fp_reg_dst := '0';
               next_fp_reg_write_source := fp_reg_write_source_fpu;
+              next_cpu_stall_length := 3;
+            when COP1_FUNCT_C_EQ => -- c.eq.s
+              next_fpu_op := fpu_op_normal;
+              next_fp_cond_write := '1';
+            when COP1_FUNCT_C_OLT => -- c.olt.s
+              next_fpu_op := fpu_op_normal;
+              next_fp_cond_write := '1';
+            when COP1_FUNCT_C_OLE => -- c.ole.s
+              next_fpu_op := fpu_op_normal;
+              next_fp_cond_write := '1';
             when others =>
               report "fp_inst.s : unknown funct " &
                 integer'image(to_integer(instruction_register(5 downto 0)))
@@ -415,14 +476,17 @@ begin
               next_reg_write := '-';
               next_fp_reg_write := '-';
               next_branch_target := branch_target_dontcare;
+              next_fp_cond_write := '-';
             end case;
-          when "10100" => -- Fixed-point Word
-            case instruction_register(5 downto 0) is
-            when "100000" => -- cvt.s.w
+          when COP1_FMT_W => -- Fixed-point Word
+            case cop1_funct_t(
+                  to_integer(instruction_register(5 downto 0))) is
+            when COP1_FUNCT_CVT_S => -- cvt.s.w
               next_fpu_op := fpu_op_normal;
               next_fp_reg_write := '1';
               next_fp_reg_dst := '0';
               next_fp_reg_write_source := fp_reg_write_source_fpu;
+              next_cpu_stall_length := 3;
             when others =>
               report "fp_inst.w : unknown funct " &
                 integer'image(to_integer(instruction_register(5 downto 0)))
@@ -430,6 +494,7 @@ begin
               next_reg_write := '-';
               next_fp_reg_write := '-';
               next_branch_target := branch_target_dontcare;
+              next_fp_cond_write := '-';
             end case;
           when others =>
             report "COP1 : unknown fmt " &
@@ -438,6 +503,7 @@ begin
             next_reg_write := '-';
             next_fp_reg_write := '-';
             next_branch_target := branch_target_dontcare;
+            next_fp_cond_write := '-';
           end case;
         when OP_LW =>
           next_alu_control := to_unsigned(FUNCT_ADDU, alu_control'length);
@@ -468,6 +534,7 @@ begin
           next_reg_write := '-';
           next_fp_reg_write := '-';
           next_branch_target := branch_target_dontcare;
+          next_fp_cond_write := '-';
         end case;
         alu_control <= next_alu_control;
         alu_src_a <= next_alu_src_a;
@@ -478,10 +545,12 @@ begin
         fp_reg_write <= next_fp_reg_write;
         fp_reg_dst <= next_fp_reg_dst;
         fp_reg_write_source <= next_fp_reg_write_source;
+        fp_cond_write <= next_fp_cond_write;
         rs_io_mode <= next_rs_io_mode;
         branch_target <= next_branch_target;
         branch_by_cop1 <= next_branch_by_cop1;
         branch_negate <= next_branch_negate;
+        cpu_stall_length <= next_cpu_stall_length;
       end if;
     end if;
   end process decode_process;
@@ -611,17 +680,35 @@ begin
           program_counter <= program_counter(29 downto 26) &
                              jump_immediate_val;
         when branch_target_b =>
-          if TO_X01(alu_iszero) = 'X' then
-            report "metavalue detected in alu_iszero" severity failure;
-            program_counter <= (others => 'X');
-          elsif TO_X01(branch_negate) = 'X' then
-            report "metavalue detected in branch_negate" severity failure;
-            program_counter <= (others => 'X');
-          else
-            if (alu_iszero xor branch_negate) = '1' then
-              program_counter <= program_counter_plus1_plusimm;
+          if TO_X01(branch_by_cop1) = 'X' then
+            report "metavalue detected in branch_by_cop1" severity failure;
+          elsif branch_by_cop1 = '1' then
+            if TO_X01(fp_cond) = 'X' then
+              report "metavalue detected in fp_cond" severity failure;
+              program_counter <= (others => 'X');
+            elsif TO_X01(branch_negate) = 'X' then
+              report "metavalue detected in branch_negate" severity failure;
+              program_counter <= (others => 'X');
             else
-              program_counter <= program_counter_plus1;
+              if (fp_cond xor branch_negate) = '1' then
+                program_counter <= program_counter_plus1_plusimm;
+              else
+                program_counter <= program_counter_plus1;
+              end if;
+            end if;
+          else
+            if TO_X01(alu_iszero) = 'X' then
+              report "metavalue detected in alu_iszero" severity failure;
+              program_counter <= (others => 'X');
+            elsif TO_X01(branch_negate) = 'X' then
+              report "metavalue detected in branch_negate" severity failure;
+              program_counter <= (others => 'X');
+            else
+              if (alu_iszero xor branch_negate) = '1' then
+                program_counter <= program_counter_plus1_plusimm;
+              else
+                program_counter <= program_counter_plus1;
+              end if;
             end if;
           end if;
         when branch_target_alu =>
@@ -646,6 +733,12 @@ begin
         when fp_reg_write_source_dontcare =>
           fd_val <= (others => '-');
         end case;
+        if TO_X01(fp_cond_write) = 'X' then
+          report "metavalue detected in fp_cond_write" severity warning;
+          fp_cond <= '-';
+        elsif fp_cond_write = '1' then
+          fp_cond <= fpu_condition;
+        end if;
       else
         fpr_we <= '0';
         fd_val <= (others => '-');
@@ -653,7 +746,7 @@ begin
     end if;
   end process writeback_process;
 
-  fpu_controller: process(fpu_op)
+  fpu_controller: process(fpu_op, instruction_register)
   begin
     case fpu_op is
     when fpu_op_normal =>

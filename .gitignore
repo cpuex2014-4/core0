@@ -4,8 +4,10 @@
 *.cmd
 *.cmd_log
 *.drc
+*.exe
 *.gise
 *.ipf
+*.log
 *.lso
 *.map
 *.mrp
@@ -25,6 +27,8 @@
 *.twx
 *.unroutes
 *.ut
+*.wdb
+*.xmsgs
 *.xpi
 *.xrpt
 *.xsl
@@ -40,10 +44,11 @@
 *_xst.*
 _*
 usage_statistics_webtalk.html
-webtalk.log
 webtalk_impact.xml
 webtalk_pn.xml
+xilinxsim.ini
 
 /iseconfig
 /xst
 /xlnx_auto*
+/isim

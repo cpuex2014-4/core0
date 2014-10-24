@@ -1,6 +1,7 @@
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
+use ieee.math_real.all; -- for debugging
 
 library work;
 use work.serial.all;
@@ -25,6 +26,34 @@ architecture behavioral of fp_register_file is
   begin
     return "$f" & integer'image(i);
   end function debug_regname;
+  function float_image(f:unsigned(31 downto 0)) return string is
+    variable f_exp : integer;
+    variable f_coef : integer;
+    variable f_sgn_factor : integer;
+    variable ff : real;
+  begin
+    f_exp := to_integer(f(30 downto 23));
+    f_coef := to_integer(f(22 downto 0));
+    if f_exp = 255 then
+      if f_coef = 0 then
+        return "Inf";
+      else
+        return "NaN";
+      end if;
+    end if;
+    if f(31) = '1' then
+      f_sgn_factor := -1;
+    else
+      f_sgn_factor := 1;
+    end if;
+    if f_exp = 0 then
+      ff := real(f_sgn_factor * f_coef) * (2 ** real(-23-126));
+    else
+      ff := (real(f_sgn_factor * f_coef) * (2 ** real(-23)) + 1.0)
+               * (2 ** real(f_exp-127));
+    end if;
+    return real'image(ff);
+  end function float_image;
   type fprs_t is array(31 downto 0) of unsigned_word;
   signal fprs : fprs_t
     := (others => x"00000000");
@@ -54,7 +83,7 @@ begin
             else
               report "reg write: " &
                 debug_regname(to_integer(fpr_wraddr)) & " " &
-                integer'image(to_integer(signed(fpr_wrval)));
+                float_image(fpr_wrval);
             end if;
           end if;
           fprs(to_integer(fpr_wraddr)) <= fpr_wrval;
