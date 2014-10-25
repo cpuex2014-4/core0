@@ -21,7 +21,7 @@ entity fp_register_file is
 end entity fp_register_file;
 
 architecture behavioral of fp_register_file is
-  constant debug_out : boolean := true;
+  constant debug_out : boolean := false;
   function debug_regname(i:integer) return string is
   begin
     return "$f" & integer'image(i);

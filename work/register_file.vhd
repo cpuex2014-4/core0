@@ -20,7 +20,7 @@ entity register_file is
 end entity register_file;
 
 architecture behavioral of register_file is
-  constant debug_out : boolean := true;
+  constant debug_out : boolean := false;
   function debug_regname(i:integer) return string is
   begin
     case i is

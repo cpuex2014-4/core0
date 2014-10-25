@@ -26,12 +26,24 @@ begin
     else
       case funct_t(to_integer(alu_control)) is
       when FUNCT_SLL | FUNCT_SLLV =>
-        alu_out <= shift_left(alu_in1, to_integer(alu_in0(4 downto 0)));
+        if TO_01(alu_in0(4 downto 0), 'X')(0) = 'X' then
+          alu_out <= (others => 'X');
+        else
+          alu_out <= shift_left(alu_in1, to_integer(alu_in0(4 downto 0)));
+        end if;
       when FUNCT_SRL | FUNCT_SRLV =>
-        alu_out <= shift_right(alu_in1, to_integer(alu_in0(4 downto 0)));
+        if TO_01(alu_in0(4 downto 0), 'X')(0) = 'X' then
+          alu_out <= (others => 'X');
+        else
+          alu_out <= shift_right(alu_in1, to_integer(alu_in0(4 downto 0)));
+        end if;
       when FUNCT_SRA | FUNCT_SRAV =>
-        alu_out <= unsigned(
-          shift_right(signed(alu_in1), to_integer(alu_in0(4 downto 0))));
+        if TO_01(alu_in0(4 downto 0), 'X')(0) = 'X' then
+          alu_out <= (others => 'X');
+        else
+          alu_out <= unsigned(
+            shift_right(signed(alu_in1), to_integer(alu_in0(4 downto 0))));
+        end if;
       when FUNCT_ADD | FUNCT_ADDU =>
         alu_out <= alu_in0 + alu_in1;
       when FUNCT_SUB | FUNCT_SUBU =>
