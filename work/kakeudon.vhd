@@ -8,14 +8,6 @@ package kakeudon is
 
   component core is
     port (
-      -- Register File
-      rs_addr : out unsigned(4 downto 0);
-      rs_val : in unsigned(31 downto 0);
-      rt_addr : out unsigned(4 downto 0);
-      rt_val : in unsigned(31 downto 0);
-      rd_addr : out unsigned(4 downto 0);
-      rd_val : out unsigned(31 downto 0);
-      gpr_we : out std_logic;
       -- Memory Controller
       mem_addr : out unsigned(29 downto 0);
       mem_data_write : out unsigned(31 downto 0);
@@ -28,26 +20,6 @@ package kakeudon is
       rs232c_send_full : in std_logic;
       rs232c_send_bottom : out unsigned(7 downto 0);
       rs232c_send_push : out std_logic;
-      -- ALU
-      alu_control : out unsigned(5 downto 0);
-      alu_in0 : out unsigned(31 downto 0);
-      alu_in1 : out unsigned(31 downto 0);
-      alu_out : in unsigned(31 downto 0);
-      alu_iszero : in std_logic;
-      -- Floating-Point Register File
-      fs_addr : out unsigned(4 downto 0);
-      fs_val : in unsigned(31 downto 0);
-      ft_addr : out unsigned(4 downto 0);
-      ft_val : in unsigned(31 downto 0);
-      fd_addr : out unsigned(4 downto 0);
-      fd_val : out unsigned(31 downto 0);
-      fpr_we : out std_logic;
-      -- FPU
-      fpu_control : out unsigned(5 downto 0);
-      fpu_in0 : out unsigned(31 downto 0);
-      fpu_in1 : out unsigned(31 downto 0);
-      fpu_out : in unsigned(31 downto 0);
-      fpu_condition : in std_logic;
       -- Clock And Reset
       clk : in std_logic;
       rst : in std_logic);

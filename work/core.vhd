@@ -4,18 +4,11 @@ use ieee.numeric_std.all;
 
 library work;
 use work.serial.all;
+use work.kakeudon_fpu.all;
 use work.kakeudon.all;
 
 entity core is
   port (
-    -- Register File
-    rs_addr : out unsigned(4 downto 0);
-    rs_val : in unsigned(31 downto 0);
-    rt_addr : out unsigned(4 downto 0);
-    rt_val : in unsigned(31 downto 0);
-    rd_addr : out unsigned(4 downto 0);
-    rd_val : out unsigned(31 downto 0);
-    gpr_we : out std_logic;
     -- Memory Controller
     mem_addr : out unsigned(29 downto 0);
     mem_data_write : out unsigned(31 downto 0);
@@ -28,32 +21,40 @@ entity core is
     rs232c_send_full : in std_logic;
     rs232c_send_bottom : out unsigned(7 downto 0);
     rs232c_send_push : out std_logic := '0';
-    -- ALU
-    alu_control : out unsigned(5 downto 0);
-    alu_in0 : out unsigned(31 downto 0);
-    alu_in1 : out unsigned(31 downto 0);
-    alu_out : in unsigned(31 downto 0);
-    alu_iszero : in std_logic;
-    -- Floating-Point Register File
-    fs_addr : out unsigned(4 downto 0);
-    fs_val : in unsigned(31 downto 0);
-    ft_addr : out unsigned(4 downto 0);
-    ft_val : in unsigned(31 downto 0);
-    fd_addr : out unsigned(4 downto 0);
-    fd_val : out unsigned(31 downto 0);
-    fpr_we : out std_logic;
-    -- FPU
-    fpu_control : out unsigned(5 downto 0);
-    fpu_in0 : out unsigned(31 downto 0);
-    fpu_in1 : out unsigned(31 downto 0);
-    fpu_out : in unsigned(31 downto 0);
-    fpu_condition : in std_logic;
     -- Clock And Reset
     clk : in std_logic;
     rst : in std_logic);
 end entity core;
 
 architecture behavioral of core is
+  signal rs_addr : unsigned(4 downto 0);
+  signal rs_val : unsigned(31 downto 0);
+  signal rt_addr : unsigned(4 downto 0);
+  signal rt_val : unsigned(31 downto 0);
+  signal rd_addr : unsigned(4 downto 0);
+  signal rd_val : unsigned(31 downto 0);
+  signal gpr_we : std_logic;
+
+  signal alu_control : unsigned(5 downto 0);
+  signal alu_in0 : unsigned(31 downto 0);
+  signal alu_in1 : unsigned(31 downto 0);
+  signal alu_out : unsigned(31 downto 0);
+  signal alu_iszero : std_logic;
+
+  signal fs_addr : unsigned(4 downto 0);
+  signal fs_val : unsigned(31 downto 0);
+  signal ft_addr : unsigned(4 downto 0);
+  signal ft_val : unsigned(31 downto 0);
+  signal fd_addr : unsigned(4 downto 0);
+  signal fd_val : unsigned(31 downto 0);
+  signal fpr_we : std_logic;
+
+  signal fpu_control : unsigned(5 downto 0);
+  signal fpu_in0 : unsigned(31 downto 0);
+  signal fpu_in1 : unsigned(31 downto 0);
+  signal fpu_out : unsigned(31 downto 0);
+  signal fpu_condition : std_logic;
+
   type cpu_state_t is (
     program_loading,
     instruction_fetch,
@@ -755,4 +756,45 @@ begin
       fpu_control <= (others => '-');
     end case;
   end process fpu_controller;
+
+  reg : register_file
+  port map (
+    clk => clk,
+    rst => rst,
+    gpr_rd0addr => rs_addr,
+    gpr_rd0val => rs_val,
+    gpr_rd1addr => rt_addr,
+    gpr_rd1val => rt_val,
+    gpr_wraddr => rd_addr,
+    gpr_wrval => rd_val,
+    gpr_we => gpr_we);
+
+  alu_unit : alu
+  port map (
+    alu_control => alu_control,
+    alu_in0 => alu_in0,
+    alu_in1 => alu_in1,
+    alu_out => alu_out,
+    alu_iszero => alu_iszero);
+
+  fp_reg : fp_register_file
+  port map (
+    clk => clk,
+    rst => rst,
+    fpr_rd0addr => fs_addr,
+    fpr_rd0val => fs_val,
+    fpr_rd1addr => ft_addr,
+    fpr_rd1val => ft_val,
+    fpr_wraddr => fd_addr,
+    fpr_wrval => fd_val,
+    fpr_we => fpr_we);
+
+  fpu_unit : fpucore
+  port map (
+    clk => clk,
+    op => fpu_control,
+    in_1 => fpu_in0,
+    in_2 => fpu_in1,
+    out_1 => fpu_out,
+    cond => fpu_condition);
 end behavioral;
