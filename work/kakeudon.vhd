@@ -6,6 +6,15 @@ package kakeudon is
   constant clk_freq : real := 66.666e6;
   subtype unsigned_word is unsigned(31 downto 0);
 
+  subtype tomasulo_tag_t is unsigned(3 downto 0);
+
+  constant cdb_size : natural := 4;
+  subtype cdb_id_t is integer range 0 to cdb_size-1;
+  subtype cdb_extended_id_t is integer range 0 to cdb_size;
+
+  type cdb_in_value_t is array(cdb_size-1 downto 0) of unsigned_word;
+  type cdb_in_tag_t is array(cdb_size-1 downto 0) of tomasulo_tag_t;
+
   component core is
     port (
       -- Memory Controller
