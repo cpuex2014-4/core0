@@ -1,19 +1,54 @@
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
+use ieee.math_real.all;
 
 package kakeudon is
   constant clk_freq : real := 66.666e6;
   subtype unsigned_word is unsigned(31 downto 0);
 
+  subtype internal_register_t is unsigned(6 downto 0);
   subtype tomasulo_tag_t is unsigned(3 downto 0);
 
-  constant cdb_size : natural := 4;
+  constant cdb_size : natural := 1;
   subtype cdb_id_t is integer range 0 to cdb_size-1;
   subtype cdb_extended_id_t is integer range 0 to cdb_size;
 
-  type cdb_in_value_t is array(cdb_size-1 downto 0) of unsigned_word;
-  type cdb_in_tag_t is array(cdb_size-1 downto 0) of tomasulo_tag_t;
+  type cdb_in_value_t is array(0 to cdb_size-1) of unsigned_word;
+  type cdb_in_tag_t is array(0 to cdb_size-1) of tomasulo_tag_t;
+
+  attribute ram_style : string;
+
+  component reservation_station is
+    generic (
+      unit_name : string;
+      latency : natural;
+      num_entries : natural;
+      opcode_len : natural);
+    port (
+      clk : in std_logic;
+      rst : in std_logic;
+      cdb_in_available : in std_logic_vector(0 to cdb_size-1);
+      cdb_in_value : in cdb_in_value_t;
+      cdb_in_tag : in cdb_in_tag_t;
+      dispatch_opcode : in unsigned(opcode_len-1 downto 0);
+      dispatch_operand0_available : in std_logic;
+      dispatch_operand0_value : in unsigned_word;
+      dispatch_operand0_tag : in tomasulo_tag_t;
+      dispatch_operand1_available : in std_logic;
+      dispatch_operand1_value : in unsigned_word;
+      dispatch_operand1_tag : in tomasulo_tag_t;
+      dispatch : in std_logic;
+      dispatch_tag : in tomasulo_tag_t;
+      dispatchable : out std_logic := '1';
+      unit_available : in std_logic;
+      issue : out std_logic := '0';
+      issue_opcode : out unsigned(opcode_len-1 downto 0);
+      issue_operand0 : out unsigned_word;
+      issue_operand1 : out unsigned_word;
+      broadcast_available : out std_logic;
+      broadcast_tag : out tomasulo_tag_t);
+  end component reservation_station;
 
   component core is
     port (
@@ -61,13 +96,23 @@ package kakeudon is
     port (
       clk : in std_logic;
       rst : in std_logic;
-      gpr_rd0addr : in unsigned(4 downto 0);
-      gpr_rd0val : out unsigned_word;
-      gpr_rd1addr : in unsigned(4 downto 0);
-      gpr_rd1val : out unsigned_word;
-      gpr_wraddr : in unsigned(4 downto 0);
-      gpr_wrval : in unsigned_word;
-      gpr_we : in std_logic);
+      cdb_in_available : in std_logic_vector(0 to cdb_size-1);
+      cdb_in_value : in cdb_in_value_t;
+      cdb_in_tag : in cdb_in_tag_t;
+      rd0_addr : in internal_register_t;
+      rd0_available : out std_logic;
+      rd0_value : out unsigned_word;
+      rd0_tag : out tomasulo_tag_t;
+      rd1_addr : in internal_register_t;
+      rd1_available : out std_logic;
+      rd1_value : out unsigned_word;
+      rd1_tag : out tomasulo_tag_t;
+      wr0_addr : in internal_register_t;
+      wr0_enable : in std_logic;
+      wr0_tag : in tomasulo_tag_t;
+      wr1_addr_tag : in tomasulo_tag_t;
+      wr1_enable : in std_logic;
+      wr1_value : in unsigned_word);
   end component register_file;
 
   component fp_register_file is
@@ -189,4 +234,131 @@ package kakeudon is
   constant COP1_FUNCT_C_EQ  : cop1_funct_t := 2#110010#;
   constant COP1_FUNCT_C_OLT : cop1_funct_t := 2#110100#;
   constant COP1_FUNCT_C_OLE : cop1_funct_t := 2#110110#;
+
+  function name_of_internal_register(r:internal_register_t) return string;
+
+  function bin_of_int(i:natural; l:natural) return string;
+  function hex_of_word(u:unsigned(31 downto 0)) return string;
+  function str_of_float(f:unsigned(31 downto 0)) return string;
+
+  type instruction_rom_t is
+    array(0 to 31) of unsigned(31 downto 0);
+  -- mapped to 0xBFC00000 (0x1FC00000)
+  constant instruction_rom_data : instruction_rom_t := (
+  -- loader: (0xBFC00000)
+    x"24100000", -- li $s0, 0
+  -- loader_loop: (0xBFC00004)
+    x"24110000", -- li $s1, 0
+    x"0ff00017", -- jal loader_recv_byte
+    x"00021600", -- sll $v0, $v0, 24
+    x"02228825", -- or $s1, $s1, $v0
+    x"0ff00017", -- jal loader_recv_byte
+    x"00021400", -- sll $v0, $v0, 16
+    x"02228825", -- or $s1, $s1, $v0
+    x"0ff00017", -- jal loader_recv_byte
+    x"00021200", -- sll $v0, $v0, 8
+    x"02228825", -- or $s1, $s1, $v0
+    x"0ff00017", -- jal loader_recv_byte
+    x"02228825", -- or $s1, $s1, $v0
+    x"ae110000", -- sw $s1, 0($s0)
+    x"26100004", -- addiu $s0, $s0, 4
+    x"26310001", -- addiu $s1, $s1, 1
+    x"1620fff0", -- bne $s1, $zero, loader_loop
+    x"24080000", -- li $t0, 0
+    x"24020000", -- li $v0, 0
+    x"24100000", -- li $s0, 0
+    x"24110000", -- li $s1, 0
+    x"241f0000", -- li $ra, 0
+    x"00000008", -- jr $zero
+  -- loader_recv_byte: (0xBFC0005C)
+    x"3c08ffff", -- li $t0, 0xffff0000
+  -- rd_poll: (0xBFC00060)
+    x"8d020000", -- lw $v0, 0($t0)
+    x"30420001", -- andi $v0, $v0, 0x01
+    x"1040fffd", -- beq $v0, $zero, rd_poll
+    x"8d020004", -- lw $v0, 4($t0)
+    x"304200ff", -- andi $v0, $v0, 0xff
+    x"03e00008",  -- jr $ra
+    others => (others => '0')
+  );
 end package kakeudon;
+
+package body kakeudon is
+  function name_of_internal_register(r:internal_register_t) return string is
+    type gpr_name_t is array(0 to 31) of string(1 to 3);
+    constant gpr_name : gpr_name_t := (
+    "$ze", "$at", "$v0", "$v1", "$a0", "$a1", "$a2", "$a3",
+    "$t0", "$t1", "$t2", "$t3", "$t4", "$t5", "$t6", "$t7",
+    "$s0", "$s1", "$s2", "$s3", "$s4", "$s5", "$s6", "$s7",
+    "$t8", "$t9", "$k0", "$k1", "$gp", "$sp", "$fp", "$ra");
+  begin
+    if TO_01(r, 'X')(0) = 'X' then
+      return "$UNKNOWN";
+    elsif r = 0 then
+      return "$zero";
+    elsif r < 32 then
+      return gpr_name(to_integer(r));
+    elsif r < 64 then
+      return "$f" & integer'image(to_integer(r-32));
+    else
+      return "$" & integer'image(to_integer(r));
+    end if;
+  end function name_of_internal_register;
+  function bin_of_int(i:natural; l:natural) return string is
+  begin
+    if l <= 0 then
+      return "";
+    else
+      return bin_of_int(i / 2, l - 1) & integer'image(i - i / 2 * 2);
+    end if;
+  end function bin_of_int;
+  function hex_of_word(u:unsigned(31 downto 0)) return string is
+    type hex_table_t is array(0 to 15) of string(1 to 1);
+    constant hex_table : hex_table_t := (
+      "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
+      "A", "B", "C", "D", "E", "F");
+  begin
+    if TO_01(u, 'X')(0) = 'X' then
+      return "0xXXXXXXXX";
+    else
+      return "0x" &
+        hex_table(to_integer(u(31 downto 28))) &
+        hex_table(to_integer(u(27 downto 24))) &
+        hex_table(to_integer(u(23 downto 20))) &
+        hex_table(to_integer(u(19 downto 16))) &
+        hex_table(to_integer(u(15 downto 12))) &
+        hex_table(to_integer(u(11 downto  8))) &
+        hex_table(to_integer(u( 7 downto  4))) &
+        hex_table(to_integer(u( 3 downto  0)));
+    end if;
+  end function hex_of_word;
+
+  function str_of_float(f:unsigned(31 downto 0)) return string is
+    variable f_exp : integer;
+    variable f_coef : integer;
+    variable f_sgn_factor : integer;
+    variable ff : real;
+  begin
+    f_exp := to_integer(f(30 downto 23));
+    f_coef := to_integer(f(22 downto 0));
+    if f_exp = 255 then
+      if f_coef = 0 then
+        return "Inf";
+      else
+        return "NaN";
+      end if;
+    end if;
+    if f(31) = '1' then
+      f_sgn_factor := -1;
+    else
+      f_sgn_factor := 1;
+    end if;
+    if f_exp = 0 then
+      ff := real(f_sgn_factor * f_coef) * (2 ** real(-23-126));
+    else
+      ff := (real(f_sgn_factor * f_coef) * (2 ** real(-23)) + 1.0)
+               * (2 ** real(f_exp-127));
+    end if;
+    return real'image(ff);
+  end function str_of_float;
+end package body kakeudon;

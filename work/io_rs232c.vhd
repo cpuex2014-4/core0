@@ -23,11 +23,13 @@ end entity io_rs232c;
 architecture behavioral of io_rs232c is
   type recv_fifo_t is array(0 to 1023) of unsigned(7 downto 0);
   signal recv_fifo : recv_fifo_t;
+  attribute ram_style of recv_fifo : signal is "block";
   signal recv_fifo_start : unsigned(9 downto 0) := (others => '0');
   signal recv_fifo_end : unsigned(9 downto 0) := (others => '0');
 
   type send_fifo_t is array(0 to 1023) of unsigned(7 downto 0);
   signal send_fifo : send_fifo_t;
+  attribute ram_style of send_fifo : signal is "block";
   signal send_fifo_start : unsigned(9 downto 0) := (others => '0');
   signal send_fifo_end : unsigned(9 downto 0) := (others => '0');
 
@@ -39,28 +41,35 @@ architecture behavioral of io_rs232c is
   signal uart_recv_data : std_logic_vector(7 downto 0);
 
 begin
-  recv_empty <=
-    '1' when recv_fifo_end - recv_fifo_start <= (0 => recv_consume) else '0';
-  recv_top <= recv_fifo(to_integer(recv_fifo_start)) when recv_consume = '0'
-              else recv_fifo(to_integer(recv_fifo_start+1));
-
+  recv_empty <= '1' when recv_fifo_end = recv_fifo_start else '0';
   send_full <= '1' when send_fifo_start - send_fifo_end - 1 <= 1 else '0';
 
   recv_into_fifo : process(clk, rst)
+    variable next_recv_fifo_start : unsigned(9 downto 0);
+    variable next_recv_fifo_end : unsigned(9 downto 0);
   begin
     if rst = '1' then
       recv_fifo_start <= (others => '0');
       recv_fifo_end <= (others => '0');
+      recv_top <= (others => '-');
     elsif rising_edge(clk) then
+      next_recv_fifo_end := recv_fifo_end;
+      next_recv_fifo_start := recv_fifo_start;
       if uart_recv_done = '1' then
         if recv_fifo_end + 1 /= recv_fifo_start then
           recv_fifo(to_integer(recv_fifo_end)) <= unsigned(uart_recv_data);
-          recv_fifo_end <= recv_fifo_end + 1;
+          next_recv_fifo_end := recv_fifo_end + 1;
+        else
+          report "RS232C receive fifo overflow" severity warning;
         end if;
       end if;
       if recv_consume = '1' then
-        recv_fifo_start <= recv_fifo_start + 1;
+        next_recv_fifo_start := recv_fifo_start + 1;
       end if;
+      recv_fifo_end <= next_recv_fifo_end;
+      recv_fifo_start <= next_recv_fifo_start;
+
+      recv_top <= recv_fifo(to_integer(next_recv_fifo_start));
     end if;
   end process recv_into_fifo;
 

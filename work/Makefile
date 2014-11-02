@@ -7,9 +7,8 @@ FPU_SOURCES = fadd.vhd feq.vhd fle.vhd flt.vhd \
 	      ftoi.vhd itof.vhd
 CORE_SOURCES = \
 	serial.vhd kakeudon.vhd memory_controller.vhd register_file.vhd \
-	reservation_station.vhd load_store_queue.vhd \
+	reservation_station.vhd \
 	alu.vhd io_rs232c.vhd core.vhd cpu.vhd \
-	fp_register_file.vhd \
 	sramsim.vhd cpu_tb.vhd
 SOURCES = $(FPU_SOURCES:%=../fpu/VHDL/%) $(CORE_SOURCES)
 # SOURCES = \
@@ -38,7 +37,6 @@ test: $(TESTBENCHES)
 
 $(TESTBENCHES): $(OBJS)
 	$(GHDLC) -e $(GHDLFLAGS) $@
-	ruby encode.rb
 	# $(GHDLC) -r $(GHDLFLAGS) $@ $(GHDL_SIM_OPT) --vcd=$@.vcd
 	$(GHDLC) -r $(GHDLFLAGS) $@ $(GHDL_SIM_OPT)
 

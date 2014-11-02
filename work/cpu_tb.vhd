@@ -2,8 +2,6 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
-use std.textio.all;
-
 library work;
 use work.serial.all;
 use work.sramsim.all;
@@ -24,8 +22,10 @@ architecture behavioral of cpu_tb is
   signal recv_busy : std_logic := '0';
   signal recv_done : std_logic;
   signal recv_data : std_logic_vector(7 downto 0);
-  file read_file : text open read_mode is "in.dat";
-  file write_file : text open write_mode is "out.dat";
+
+  type t_char_file is file of character;
+  file read_file : t_char_file open read_mode is "in.dat";
+  file write_file : t_char_file open write_mode is "out.dat";
 
   signal rst : std_logic := '0';
 
@@ -47,15 +47,15 @@ architecture behavioral of cpu_tb is
 begin
   rxd <= transport rxd1 after 100 ns;
   rdf : process(simclk)
-    variable read_line : line;
     variable read_byte : integer;
     variable send_go_v : std_logic;
+    variable ch : character;
   begin
     if rising_edge(simclk) then
       send_go_v := '0';
       if send_busy /= '1' and not endfile(read_file) then
-        readline(read_file, read_line);
-        read(read_line, read_byte);
+        read(read_file, ch);
+        read_byte := character'pos(ch);
         send_data <= std_logic_vector(to_unsigned(read_byte, 8));
         send_go_v := '1';
       end if;
@@ -64,15 +64,13 @@ begin
   end process rdf;
 
   wrf : process(simclk)
-    variable write_line : line;
     variable write_byte : integer;
     variable send_go_v : std_logic;
   begin
     if rising_edge(simclk) then
       if recv_done = '1' then
         write_byte := to_integer(unsigned(recv_data));
-        write(write_line, write_byte);
-        writeline(write_file, write_line);
+        write(write_file, character'val(write_byte));
       end if;
     end if;
   end process wrf;
