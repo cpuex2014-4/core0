@@ -171,7 +171,8 @@ begin
       if entries_issuable_any = '1' then
         assert not debug_out
           report "RnSn for " & unit_name & ": " &
-                 "issue"
+                 "issue (tag = " &
+                   integer'image(to_integer(entries_issue_tag(0))) & ")"
             severity note;
       end if;
 
@@ -189,7 +190,8 @@ begin
           next_entries_operand0_value(i) := entries_operand0_value(i);
         else
           next_entries_operand0_available(i) := '1';
-          next_entries_operand0_value(i) := cdb_in_value(i);
+          next_entries_operand0_value(i) :=
+            cdb_in_value(next_entries_operand0_source(i));
         end if;
 
         next_entries_operand1_source(i) := cdb_size;
@@ -204,7 +206,8 @@ begin
           next_entries_operand1_value(i) := entries_operand1_value(i);
         else
           next_entries_operand1_available(i) := '1';
-          next_entries_operand1_value(i) := cdb_in_value(i);
+          next_entries_operand1_value(i) :=
+            cdb_in_value(next_entries_operand1_source(i));
         end if;
       end loop;
 
@@ -217,10 +220,10 @@ begin
            (entries_issuable_any = '0' and
             entries_busy(i) = '0' and
             (i = 0 or entries_busy(i-1) = '1'))) then
-          assert not debug_out
+          assert TO_01(dispatch_tag, 'X')(0) /= 'X'
             report "RnSn for " & unit_name & ": " &
-                   "dispatch"
-              severity note;
+                   "metavalue detected in dispatch_tag"
+              severity failure;
           assert TO_X01(dispatch_operand0_available) /= 'X'
             report "RnSn for " & unit_name & ": " &
                    "metavalue detected in dispatch_operand0_available"
@@ -229,6 +232,11 @@ begin
             report "RnSn for " & unit_name & ": " &
                    "metavalue detected in dispatch_operand1_available"
               severity failure;
+          assert not debug_out
+            report "RnSn for " & unit_name & ": " &
+                   "dispatch (tag = " &
+                     integer'image(to_integer(dispatch_tag)) & ")"
+              severity note;
           entries_busy(i) <= '1';
           entries_tag(i) <= dispatch_tag;
           entries_opcode(i) <= dispatch_opcode;
@@ -281,4 +289,19 @@ begin
       end loop;
     end if;
   end process sequential;
+
+  debug_business_status : process(entries_busy)
+  begin
+    if debug_out then
+      if TO_01(unsigned(entries_busy), 'X')(0) = 'X' then
+        report "RnSn for " & unit_name & ": " &
+               "entries_busy = X"
+          severity note;
+      else
+        report "RnSn for " & unit_name & ": " &
+               "entries_busy = " & bin_of_int(to_integer(unsigned(entries_busy)), entries_busy'length)
+          severity note;
+      end if;
+    end if;
+  end process;
 end architecture behavioral;

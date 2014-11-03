@@ -53,19 +53,29 @@ architecture behavioral of core is
   signal instruction_register : unsigned(31 downto 0);
   signal instruction_register_available : std_logic := '0';
 
+  signal instruction_fetch_stall : std_logic := '0';
+
   -- instruction decode
   type unit_id_t is (unit_alu, unit_fadd);
+  signal decode_rob_type : rob_type_t;
   signal unit_id : unit_id_t;
   signal unit_operation : unsigned(3 downto 0);
   signal operand0_addr : internal_register_t;
   signal operand1_addr : internal_register_t;
-  signal immediate_val : unsigned(31 downto 0);
-  signal use_immediate : std_logic;
+  signal operand0_immediate_val : unsigned(31 downto 0);
+  signal operand1_immediate_val : unsigned(31 downto 0);
+  signal operand0_use_immediate : std_logic;
+  signal operand1_use_immediate : std_logic;
   signal destination_addr : internal_register_t;
-  signal destination_enable : std_logic;
+  signal destination_enable : std_logic := '0';
   signal decoded_instruction_available : std_logic := '0';
 
+  signal decode_stall : std_logic := '0';
+
   -- dispatch
+  signal dispatch_operand0_available_reg : std_logic;
+  signal dispatch_operand0_value_reg : unsigned_word;
+  signal dispatch_operand0_tag_reg : tomasulo_tag_t;
   signal dispatch_operand0_available : std_logic;
   signal dispatch_operand0_value : unsigned_word;
   signal dispatch_operand0_tag : tomasulo_tag_t;
@@ -75,7 +85,7 @@ architecture behavioral of core is
   signal dispatch_operand1_available : std_logic;
   signal dispatch_operand1_value : unsigned_word;
   signal dispatch_operand1_tag : tomasulo_tag_t;
-  signal dispatch_tag : tomasulo_tag_t;
+  signal wr0_enable : std_logic;
 
   signal any_dispatch : std_logic;
 
@@ -83,15 +93,21 @@ architecture behavioral of core is
   signal alu_dispatch : std_logic := '0';
   signal alu_available : std_logic;
   signal alu_issue : std_logic;
-  signal alu_opcode : unsigned(2 downto 0);
+  signal alu_opcode : unsigned(3 downto 0);
   signal alu_operand0 : unsigned(31 downto 0);
   signal alu_operand1 : unsigned(31 downto 0);
 
   -- reorder buffer
-  signal rob_top : tomasulo_tag_t;
+  signal rob_top_ready : std_logic;
+  signal rob_top_type : rob_type_t;
+  signal rob_top_dest : internal_register_t;
   signal rob_top_value : unsigned(31 downto 0);
   signal rob_bottom : tomasulo_tag_t;
-  signal rob_pop : std_logic;
+  signal rob_dispatchable : std_logic;
+
+  -- complete
+  signal calc_complete : std_logic;
+  signal any_complete : std_logic;
 begin
   instruction_register <=
     (others => 'X') when TO_01(instruction_selector, 'X')(0) = 'X' else
@@ -118,24 +134,29 @@ begin
       instruction_selector <= (others => '-');
       instruction_register_available <= '0';
     elsif rising_edge(clk) then
-      assert TO_01(program_counter, 'X')(0) /= 'X'
-        report "metavalue detected in program_counter"
-          severity failure;
-      assert not debug_instruction_fetch
-        report "program_counter = " & hex_of_word(program_counter&"00")
-          severity note;
-      if program_counter(26 downto 16) = "00000000000" then
-        instruction_selector <= "00";
-      elsif program_counter(26 downto 5) = "1111111000000000000000" then
-        instruction_selector <= "01";
-      else
-        instruction_selector <= "10";
+      if instruction_fetch_stall /= '1' then
+        assert TO_01(program_counter, 'X')(0) /= 'X'
+          report "metavalue detected in program_counter"
+            severity failure;
+        assert not debug_instruction_fetch
+          report "program_counter = " & hex_of_word(program_counter&"00")
+            severity note;
+        if program_counter(26 downto 16) = "00000000000" then
+          instruction_selector <= "00";
+        elsif program_counter(26 downto 5) = "1111111000000000000000" then
+          instruction_selector <= "01";
+        else
+          instruction_selector <= "10";
+        end if;
+        program_counter <= program_counter + 1;
+        program_counter_plus1 <= program_counter + 1;
+        instruction_register_available <= '1';
       end if;
-      program_counter <= program_counter + 1;
-      program_counter_plus1 <= program_counter + 1;
-      instruction_register_available <= '1';
     end if;
   end process instruction_fetch_sequential;
+
+  instruction_fetch_stall <=
+    instruction_register_available and decode_stall;
 
   rs232c_send_bottom <= instruction_register(7 downto 0);
 
@@ -153,19 +174,49 @@ begin
     variable d_short_imm : unsigned(15 downto 0);
     variable d_sign_ext_imm : unsigned(31 downto 0);
     variable d_zero_ext_imm : unsigned(31 downto 0);
+    variable d_zero_ext_sa : unsigned(31 downto 0);
+
+    variable next_decode_rob_type : rob_type_t;
+    variable next_unit_id : unit_id_t;
+    variable next_unit_operation : unsigned(3 downto 0);
+    variable next_operand0_use_immediate : std_logic;
+    variable next_operand0_addr : internal_register_t;
+    variable next_operand0_immediate_val : unsigned(31 downto 0);
+    variable next_operand1_use_immediate : std_logic;
+    variable next_operand1_addr : internal_register_t;
+    variable next_operand1_immediate_val : unsigned(31 downto 0);
+    variable next_destination_enable : std_logic;
+    variable next_destination_addr : internal_register_t;
+    variable next_decoded_instruction_available : std_logic;
   begin
     if rst = '1' then
+      decode_rob_type <= rob_type_calc; -- don't care
       unit_id <= unit_alu; -- don't care
       unit_operation <= (others => '-');
+      operand0_use_immediate <= '-';
       operand0_addr <= (others => '-');
+      operand0_immediate_val <= (others => '-');
+      operand1_use_immediate <= '-';
       operand1_addr <= (others => '-');
-      immediate_val <= (others => '-');
-      use_immediate <= '-';
+      operand1_immediate_val <= (others => '-');
+      destination_enable <= '0';
       destination_addr <= (others => '-');
-      destination_enable <= '-';
       decoded_instruction_available <= '0';
     elsif rising_edge(clk) then
-      if instruction_register_available = '1' then
+      if instruction_register_available = '1' and decode_stall /= '1' then
+        next_decode_rob_type := rob_type_calc; -- don't care
+        next_unit_id := unit_alu; -- don't care
+        next_unit_operation := (others => '-');
+        next_operand0_use_immediate := '-';
+        next_operand0_addr := (others => '-');
+        next_operand0_immediate_val := (others => '-');
+        next_operand1_use_immediate := '-';
+        next_operand1_addr := (others => '-');
+        next_operand1_immediate_val := (others => '-');
+        next_destination_enable := '-';
+        next_destination_addr := (others => '-');
+        next_decoded_instruction_available := '-';
+
         assert TO_01(instruction_register, 'X')(0) /= 'X'
           report "metavalue detected in instruction_register"
             severity failure;
@@ -182,73 +233,151 @@ begin
         d_short_imm := instruction_register(15 downto 0);
         d_sign_ext_imm := unsigned(resize(signed(d_short_imm), 32));
         d_zero_ext_imm := resize(d_short_imm, 32);
+        d_zero_ext_sa := resize(d_sa, 32);
         case d_opcode is
+        when OP_SPECIAL =>
+          case d_funct is
+          when FUNCT_SLL =>
+            next_decode_rob_type := rob_type_calc;
+            next_unit_id := unit_alu;
+            next_unit_operation :=
+              to_unsigned(ALU_OP_SLL, unit_operation'length);
+            next_operand0_use_immediate := '1';
+            next_operand0_immediate_val := d_zero_ext_sa;
+            next_operand1_use_immediate := '0';
+            next_operand1_addr := d_rt;
+            next_destination_enable := '1';
+            next_destination_addr := d_rd;
+            next_decoded_instruction_available := '1';
+          when FUNCT_OR =>
+            next_decode_rob_type := rob_type_calc;
+            next_unit_id := unit_alu;
+            next_unit_operation := to_unsigned(ALU_OP_OR, unit_operation'length);
+            next_operand0_addr := d_rs;
+            next_operand1_addr := d_rt;
+            next_operand0_immediate_val := (others => '-');
+            next_operand1_immediate_val := (others => '-');
+            next_operand0_use_immediate := '0';
+            next_operand1_use_immediate := '0';
+            next_destination_enable := '1';
+            next_destination_addr := d_rd;
+            next_decoded_instruction_available := '1';
+          when others =>
+            report "unknown SPECIAL funct " & bin_of_int(d_funct,6)
+              severity failure;
+          end case;
         when OP_ADDIU =>
-          unit_id <= unit_alu;
-          unit_operation <= "0001";
-          operand0_addr <= d_rs;
-          operand1_addr <= (others => '-');
-          immediate_val <= d_sign_ext_imm;
-          use_immediate <= '1';
-          destination_addr <= d_rd;
-          destination_enable <= '-';
-          decoded_instruction_available <= '1';
+          next_decode_rob_type := rob_type_calc;
+          next_unit_id := unit_alu;
+          next_unit_operation :=
+            to_unsigned(ALU_OP_ADDU, unit_operation'length);
+          next_operand0_use_immediate := '0';
+          next_operand0_addr := d_rs;
+          next_operand1_use_immediate := '1';
+          next_operand1_immediate_val := d_sign_ext_imm;
+          next_destination_enable := '1';
+          next_destination_addr := d_rt;
+          next_decoded_instruction_available := '1';
         when OP_JAL =>
+          report "TODO: correct control signal" severity error;
           -- TODO: correct control signal
-          unit_id <= unit_alu;
-          unit_operation <= "0001";
-          operand0_addr <= d_rs;
-          operand1_addr <= (others => '-');
-          immediate_val <= d_sign_ext_imm;
-          use_immediate <= '1';
-          destination_addr <= d_rd;
-          destination_enable <= '-';
-          decoded_instruction_available <= '1';
+          next_decode_rob_type := rob_type_calc;
+          next_unit_id := unit_alu;
+          next_unit_operation :=
+            to_unsigned(ALU_OP_ADDU, unit_operation'length);
+          next_operand0_use_immediate := '0';
+          next_operand0_addr := d_rs;
+          next_operand1_use_immediate := '1';
+          next_operand1_immediate_val := d_sign_ext_imm;
+          next_destination_enable := '1';
+          next_destination_addr := d_rt;
+          next_decoded_instruction_available := '1';
         when others =>
           report "unknown opcode " & bin_of_int(d_opcode,6)
             severity failure;
-          unit_id <= unit_alu; -- don't care
-          unit_operation <= (others => '-');
-          operand0_addr <= (others => '-');
-          operand1_addr <= (others => '-');
-          immediate_val <= (others => '-');
-          use_immediate <= '-';
-          destination_addr <= (others => '-');
-          destination_enable <= '-';
-          decoded_instruction_available <= '0';
         end case;
-      else
+        decode_rob_type <= next_decode_rob_type;
+        unit_id <= next_unit_id;
+        unit_operation <= next_unit_operation;
+        operand0_use_immediate <= next_operand0_use_immediate;
+        operand0_addr <= next_operand0_addr;
+        operand0_immediate_val <= next_operand0_immediate_val;
+        operand1_use_immediate <= next_operand1_use_immediate;
+        operand1_addr <= next_operand1_addr;
+        operand1_immediate_val <= next_operand1_immediate_val;
+        destination_enable <= next_destination_enable;
+        destination_addr <= next_destination_addr;
+        decoded_instruction_available <= next_decoded_instruction_available;
+      elsif decode_stall /= '1' then
+        decode_rob_type <= rob_type_calc; -- don't care
         unit_id <= unit_alu; -- don't care
         unit_operation <= (others => '-');
+        operand0_use_immediate <= '-';
         operand0_addr <= (others => '-');
+        operand0_immediate_val <= (others => '-');
+        operand1_use_immediate <= '-';
         operand1_addr <= (others => '-');
-        immediate_val <= (others => '-');
-        use_immediate <= '-';
+        operand1_immediate_val <= (others => '-');
+        destination_enable <= '0';
         destination_addr <= (others => '-');
-        destination_enable <= '-';
         decoded_instruction_available <= '0';
       end if;
     end if;
   end process decode_sequential;
 
+  decode_stall <=
+    decoded_instruction_available and not any_dispatch;
+
+  rob : reorder_buffer
+  port map (
+    clk => clk,
+    rst => rst,
+    cdb_in_available => cdb_available,
+    cdb_in_value => cdb_value,
+    cdb_in_tag => cdb_tag,
+    dispatchable => rob_dispatchable,
+    dispatch => any_dispatch,
+    dispatch_type => decode_rob_type,
+    dispatch_dest => destination_addr,
+    rob_top_ready => rob_top_ready,
+    rob_top_type => rob_top_type,
+    rob_top_dest => rob_top_dest,
+    rob_top_value => rob_top_value,
+    rob_bottom => rob_bottom,
+    complete => any_complete);
+
+  dispatch_operand0_available <=
+    'X' when TO_X01(operand0_use_immediate) = 'X' else
+    '1' when operand0_use_immediate = '1' else
+    dispatch_operand0_available_reg;
+  dispatch_operand0_value <=
+    (others => 'X') when TO_X01(operand0_use_immediate) = 'X' else
+    operand0_immediate_val when operand0_use_immediate = '1' else
+    dispatch_operand0_value_reg;
+  dispatch_operand0_tag <=
+    (others => 'X') when TO_X01(operand0_use_immediate) = 'X' else
+    (others => '-') when operand0_use_immediate = '1' else
+    dispatch_operand0_tag_reg;
   dispatch_operand1_available <=
-    'X' when TO_X01(use_immediate) = 'X' else
-    '1' when use_immediate = '1' else
+    'X' when TO_X01(operand1_use_immediate) = 'X' else
+    '1' when operand1_use_immediate = '1' else
     dispatch_operand1_available_reg;
   dispatch_operand1_value <=
-    (others => 'X') when TO_X01(use_immediate) = 'X' else
-    immediate_val when use_immediate = '1' else
+    (others => 'X') when TO_X01(operand1_use_immediate) = 'X' else
+    operand1_immediate_val when operand1_use_immediate = '1' else
     dispatch_operand1_value_reg;
   dispatch_operand1_tag <=
-    (others => 'X') when TO_X01(use_immediate) = 'X' else
-    (others => '-') when use_immediate = '1' else
+    (others => 'X') when TO_X01(operand1_use_immediate) = 'X' else
+    (others => '-') when operand1_use_immediate = '1' else
     dispatch_operand1_tag_reg;
 
   any_dispatch <= alu_dispatch; -- or foo_dispatch or ...
 
   dispatch_combinational :
   process(unit_id, unit_operation, operand0_addr, operand1_addr,
-    immediate_val, use_immediate, destination_addr, destination_enable,
+    operand0_immediate_val, operand0_use_immediate,
+    operand1_immediate_val, operand1_use_immediate,
+    destination_addr, destination_enable,
     decoded_instruction_available)
   begin
   end process dispatch_combinational;
@@ -261,6 +390,8 @@ begin
     end if;
   end process dispatch_sequential;
 
+  wr0_enable <= any_dispatch and destination_enable;
+
   reg : register_file
   port map (
     clk => clk,
@@ -269,18 +400,18 @@ begin
     cdb_in_value => cdb_value,
     cdb_in_tag => cdb_tag,
     rd0_addr => operand0_addr,
-    rd0_available => dispatch_operand0_available,
-    rd0_value => dispatch_operand0_value,
-    rd0_tag => dispatch_operand0_tag,
+    rd0_available => dispatch_operand0_available_reg,
+    rd0_value => dispatch_operand0_value_reg,
+    rd0_tag => dispatch_operand0_tag_reg,
     rd1_addr => operand1_addr,
     rd1_available => dispatch_operand1_available_reg,
     rd1_value => dispatch_operand1_value_reg,
     rd1_tag => dispatch_operand1_tag_reg,
     wr0_addr => destination_addr,
-    wr0_enable => destination_enable,
+    wr0_enable => wr0_enable,
     wr0_tag => rob_bottom,
-    wr1_addr_tag => rob_top,
-    wr1_enable => rob_pop,
+    wr1_addr => rob_top_dest,
+    wr1_enable => rob_top_ready,
     wr1_value => rob_top_value);
 
   alu_dispatch <=
@@ -294,14 +425,14 @@ begin
     unit_name => "alu",
     latency => 1,
     num_entries => 2,
-    opcode_len => 3)
+    opcode_len => 4)
   port map (
     clk => clk,
     rst => rst,
     cdb_in_available => cdb_available,
     cdb_in_value => cdb_value,
     cdb_in_tag => cdb_tag,
-    dispatch_opcode => unit_operation(2 downto 0),
+    dispatch_opcode => unit_operation,
     dispatch_operand0_available => dispatch_operand0_available,
     dispatch_operand0_value => dispatch_operand0_value,
     dispatch_operand0_tag => dispatch_operand0_tag,
@@ -309,7 +440,7 @@ begin
     dispatch_operand1_value => dispatch_operand1_value,
     dispatch_operand1_tag => dispatch_operand1_tag,
     dispatch => alu_dispatch,
-    dispatch_tag => dispatch_tag,
+    dispatch_tag => rob_bottom,
     dispatchable => alu_dispatchable,
     unit_available => alu_available,
     issue => alu_issue,
@@ -318,6 +449,16 @@ begin
     issue_operand1 => alu_operand1,
     broadcast_available => cdb_available(0),
     broadcast_tag => cdb_tag(0));
+
+  alu_unit : alu
+  port map (
+    alu_opcode => alu_opcode,
+    alu_in0 => alu_operand0,
+    alu_in1 => alu_operand1,
+    alu_out => cdb_value(0));
+
+  calc_complete <= rob_top_ready when rob_top_type = rob_type_calc else '0';
+  any_complete <= calc_complete;
 
   cdb_inspect : process(clk, rst)
   begin
@@ -334,8 +475,10 @@ begin
               integer'image(i) & ")"
                 severity failure;
           assert not debug_cdb
-            report "CDB(" & integer'image(to_integer(cdb_tag(i))) &
-              ") <- " & hex_of_word(cdb_value(i));
+            report "CDB(id " & integer'image(i) &
+                   ", tag " & integer'image(to_integer(cdb_tag(i))) &
+                   ") <- " & hex_of_word(cdb_value(i))
+              severity note;
         end if;
       end loop;
     end if;

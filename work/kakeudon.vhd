@@ -17,6 +17,8 @@ package kakeudon is
   type cdb_in_value_t is array(0 to cdb_size-1) of unsigned_word;
   type cdb_in_tag_t is array(0 to cdb_size-1) of tomasulo_tag_t;
 
+  type rob_type_t is (rob_type_branch, rob_type_store, rob_type_calc);
+
   attribute ram_style : string;
 
   component reservation_station is
@@ -49,6 +51,25 @@ package kakeudon is
       broadcast_available : out std_logic;
       broadcast_tag : out tomasulo_tag_t);
   end component reservation_station;
+
+  component reorder_buffer is
+    port (
+      clk : in std_logic;
+      rst : in std_logic;
+      cdb_in_available : in std_logic_vector(0 to cdb_size-1);
+      cdb_in_value : in cdb_in_value_t;
+      cdb_in_tag : in cdb_in_tag_t;
+      dispatchable : out std_logic := '1';
+      dispatch : in std_logic;
+      dispatch_type : in rob_type_t;
+      dispatch_dest : in internal_register_t;
+      rob_top_ready : out std_logic;
+      rob_top_type : out rob_type_t;
+      rob_top_dest : out internal_register_t;
+      rob_top_value : out unsigned(31 downto 0);
+      rob_bottom : out tomasulo_tag_t;
+      complete : in std_logic);
+  end component reorder_buffer;
 
   component core is
     port (
@@ -110,7 +131,7 @@ package kakeudon is
       wr0_addr : in internal_register_t;
       wr0_enable : in std_logic;
       wr0_tag : in tomasulo_tag_t;
-      wr1_addr_tag : in tomasulo_tag_t;
+      wr1_addr : in internal_register_t;
       wr1_enable : in std_logic;
       wr1_value : in unsigned_word);
   end component register_file;
@@ -167,11 +188,10 @@ package kakeudon is
 
   component alu is
     port (
-      alu_control : in unsigned(5 downto 0);
+      alu_opcode : in unsigned(3 downto 0);
       alu_in0 : in unsigned(31 downto 0);
       alu_in1 : in unsigned(31 downto 0);
-      alu_out : buffer unsigned(31 downto 0);
-      alu_iszero : out std_logic);
+      alu_out : out unsigned(31 downto 0));
   end component alu;
 
   subtype opcode_t is integer range 0 to 63;
@@ -234,6 +254,21 @@ package kakeudon is
   constant COP1_FUNCT_C_EQ  : cop1_funct_t := 2#110010#;
   constant COP1_FUNCT_C_OLT : cop1_funct_t := 2#110100#;
   constant COP1_FUNCT_C_OLE : cop1_funct_t := 2#110110#;
+
+  subtype alu_opcode_t is integer range 0 to 16;
+  constant ALU_OP_ADD  : alu_opcode_t := 2#0000#;
+  constant ALU_OP_ADDU : alu_opcode_t := 2#0001#;
+  constant ALU_OP_SUB  : alu_opcode_t := 2#0010#;
+  constant ALU_OP_SUBU : alu_opcode_t := 2#0011#;
+  constant ALU_OP_AND  : alu_opcode_t := 2#0100#;
+  constant ALU_OP_OR   : alu_opcode_t := 2#0101#;
+  constant ALU_OP_XOR  : alu_opcode_t := 2#0110#;
+  constant ALU_OP_NOR  : alu_opcode_t := 2#0111#;
+  constant ALU_OP_SLT  : alu_opcode_t := 2#1010#;
+  constant ALU_OP_SLTU : alu_opcode_t := 2#1011#;
+  constant ALU_OP_SLL  : alu_opcode_t := 2#1100#;
+  constant ALU_OP_SRL  : alu_opcode_t := 2#1110#;
+  constant ALU_OP_SRA  : alu_opcode_t := 2#1111#;
 
   function name_of_internal_register(r:internal_register_t) return string;
 
