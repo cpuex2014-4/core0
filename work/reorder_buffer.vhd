@@ -22,7 +22,13 @@ entity reorder_buffer is
     rob_top_dest : out internal_register_t;
     rob_top_value : out unsigned(31 downto 0);
     rob_bottom : out tomasulo_tag_t;
-    complete : in std_logic);
+    rob_rd0_tag : in tomasulo_tag_t;
+    rob_rd0_ready : out std_logic;
+    rob_rd0_value : out unsigned(31 downto 0);
+    rob_rd1_tag : in tomasulo_tag_t;
+    rob_rd1_ready : out std_logic;
+    rob_rd1_value : out unsigned(31 downto 0);
+    commit : in std_logic);
 end entity reorder_buffer;
 
 architecture behavioral of reorder_buffer is
@@ -48,6 +54,28 @@ begin
   rob_top_dest <= rob_entries_dest(to_integer(rob_start));
   rob_top_value <= rob_entries_val(to_integer(rob_start));
   dispatchable <= '1' when rob_start - rob_end /= 1 else '0';
+
+  update_rd0 : process(rob_rd0_tag, rob_entries_ready, rob_entries_val)
+  begin
+    if TO_01(rob_rd0_tag, 'X')(0) = 'X' then
+      rob_rd0_ready <= 'X';
+      rob_rd0_value <= (others => 'X');
+    else
+      rob_rd0_ready <= rob_entries_ready(to_integer(rob_rd0_tag));
+      rob_rd0_value <= rob_entries_val(to_integer(rob_rd0_tag));
+    end if;
+  end process update_rd0;
+  update_rd1 : process(rob_rd1_tag, rob_entries_ready, rob_entries_val)
+  begin
+    if TO_01(rob_rd1_tag, 'X')(0) = 'X' then
+      rob_rd1_ready <= 'X';
+      rob_rd1_value <= (others => 'X');
+    else
+      rob_rd1_ready <= rob_entries_ready(to_integer(rob_rd1_tag));
+      rob_rd1_value <= rob_entries_val(to_integer(rob_rd1_tag));
+    end if;
+  end process update_rd1;
+
   sequential : process(clk, rst)
     type cdb_extended_id_array_t is
       array(0 to num_entries-1) of cdb_extended_id_t;
@@ -60,8 +88,8 @@ begin
       assert TO_X01(dispatch) /= 'X'
         report "metavalue detected in dispatch"
           severity failure;
-      assert TO_X01(complete) /= 'X'
-        report "metavalue detected in complete"
+      assert TO_X01(commit) /= 'X'
+        report "metavalue detected in commit"
           severity failure;
 
       if dispatch = '1' then
@@ -72,7 +100,7 @@ begin
         rob_end <= rob_end + 1;
       end if;
 
-      if complete = '1' then
+      if commit = '1' then
         rob_start <= rob_start + 1;
       end if;
 

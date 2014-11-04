@@ -37,18 +37,100 @@ architecture behavioral of register_file is
   signal reg_tag : reg_tag_t;
   signal reg_available : std_logic_vector(0 to 127) := (others => '1');
 begin
-  rd0_available <= 'X' when TO_01(rd0_addr, 'X')(0) = 'X' else
-                   reg_available(to_integer(rd0_addr));
-  rd0_value     <= (others => 'X') when TO_01(rd0_addr, 'X')(0) = 'X' else
-                   reg_value(to_integer(rd0_addr));
-  rd0_tag       <= (others => 'X') when TO_01(rd0_addr, 'X')(0) = 'X' else
-                   reg_tag(to_integer(rd0_addr));
-  rd1_available <= 'X' when TO_01(rd1_addr, 'X')(0) = 'X' else
-                   reg_available(to_integer(rd1_addr));
-  rd1_value     <= (others => 'X') when TO_01(rd1_addr, 'X')(0) = 'X' else
-                   reg_value(to_integer(rd1_addr));
-  rd1_tag       <= (others => 'X') when TO_01(rd1_addr, 'X')(0) = 'X' else
-                   reg_tag(to_integer(rd1_addr));
+  update_rd0 :
+  process(rd0_addr, reg_available, reg_value, reg_tag,
+          cdb_in_available, cdb_in_value, cdb_in_tag)
+    variable available : std_logic;
+    variable value : unsigned_word;
+    variable tag : tomasulo_tag_t;
+    variable source : cdb_extended_id_t;
+  begin
+    if TO_01(rd0_addr, 'X')(0) = 'X' then
+      rd0_available <= 'X';
+      rd0_value <= (others => 'X');
+      rd0_tag <= (others => 'X');
+    else
+      available := reg_available(to_integer(rd0_addr));
+      value := reg_value(to_integer(rd0_addr));
+      tag := reg_tag(to_integer(rd0_addr));
+      if TO_X01(available) = 'X' then
+        report "metavalue detected in available"
+          severity failure;
+      elsif available = '1' then
+        rd0_available <= '1';
+        rd0_value <= value;
+        rd0_tag <= (others => '-');
+      else
+        assert TO_01(tag, 'X')(0) /= 'X'
+          report "metavalue detected in tag"
+            severity failure;
+
+        source := cdb_size;
+        for i in 0 to cdb_size-1 loop
+          if cdb_in_available(i) = '1' and cdb_in_tag(i) = tag then
+            source := i;
+          end if;
+        end loop;
+
+        if source = cdb_size then
+          rd0_available <= available;
+          rd0_value <= value;
+          rd0_tag <= tag;
+        else
+          rd0_available <= '1';
+          rd0_value <= cdb_in_value(source);
+          rd0_tag <= (others => '-');
+        end if;
+      end if;
+    end if;
+  end process update_rd0;
+  update_rd1 :
+  process(rd1_addr, reg_available, reg_value, reg_tag,
+          cdb_in_available, cdb_in_value, cdb_in_tag)
+    variable available : std_logic;
+    variable value : unsigned_word;
+    variable tag : tomasulo_tag_t;
+    variable source : cdb_extended_id_t;
+  begin
+    if TO_01(rd1_addr, 'X')(0) = 'X' then
+      rd1_available <= 'X';
+      rd1_value <= (others => 'X');
+      rd1_tag <= (others => 'X');
+    else
+      available := reg_available(to_integer(rd1_addr));
+      value := reg_value(to_integer(rd1_addr));
+      tag := reg_tag(to_integer(rd1_addr));
+      if TO_X01(available) = 'X' then
+        report "metavalue detected in available"
+          severity failure;
+      elsif available = '1' then
+        rd1_available <= '1';
+        rd1_value <= value;
+        rd1_tag <= (others => '-');
+      else
+        assert TO_01(tag, 'X')(0) /= 'X'
+          report "metavalue detected in tag"
+            severity failure;
+
+        source := cdb_size;
+        for i in 0 to cdb_size-1 loop
+          if cdb_in_available(i) = '1' and cdb_in_tag(i) = tag then
+            source := i;
+          end if;
+        end loop;
+
+        if source = cdb_size then
+          rd1_available <= available;
+          rd1_value <= value;
+          rd1_tag <= tag;
+        else
+          rd1_available <= '1';
+          rd1_value <= cdb_in_value(source);
+          rd1_tag <= (others => '-');
+        end if;
+      end if;
+    end if;
+  end process update_rd1;
   sequential : process(clk, rst)
   begin
     if rst = '1' then
@@ -74,7 +156,8 @@ begin
                  " <- tag(" & integer'image(to_integer(wr0_tag)) & ")"
             severity note;
         reg_available(to_integer(wr0_addr)) <= '0';
-        reg_value(to_integer(wr0_addr)) <= (others => '-');
+        -- do not discard value, in order to rollback
+        -- reg_value(to_integer(wr0_addr)) <= (others => '-');
         reg_tag(to_integer(wr0_addr)) <= wr0_tag;
       end if;
       if wr1_enable = '1' then
@@ -82,14 +165,14 @@ begin
           report "metavalue detected in wr1_addr"
             severity failure;
         assert TO_01(wr1_value, 'X')(0) /= 'X'
-          report "metavalue detected in wr1_tag"
+          report "metavalue detected in wr1_value"
             severity failure;
         if not (wr0_enable = '1' and wr0_addr = wr1_addr) then
           assert not debug_out
             report name_of_internal_register(wr0_addr) &
                    " <- " & hex_of_word(wr1_value)
               severity note;
-          reg_available(to_integer(wr1_addr)) <= '0';
+          reg_available(to_integer(wr1_addr)) <= '1';
           reg_value(to_integer(wr1_addr)) <= wr1_value;
           reg_tag(to_integer(wr1_addr)) <= (others => '-');
         end if;

@@ -79,7 +79,7 @@ begin
     variable entries_issue_operand0 : entries_operand_t;
     variable entries_issue_operand1 : entries_operand_t;
 
-    -- temporary values for snooping CDB
+    -- temporary values for snooping for CDB
     type cdb_extended_id_array_t is
       array(0 to num_entries-1) of cdb_extended_id_t;
     variable next_entries_operand0_source : cdb_extended_id_array_t;
@@ -172,39 +172,69 @@ begin
         assert not debug_out
           report "RnSn for " & unit_name & ": " &
                  "issue (tag = " &
-                   integer'image(to_integer(entries_issue_tag(0))) & ")"
+                   integer'image(to_integer(entries_issue_tag(0))) & ", " &
+                   "o0 = " & hex_of_word(entries_issue_operand0(0)) & ", " &
+                   "o1 = " & hex_of_word(entries_issue_operand1(0)) & ")"
             severity note;
       end if;
 
       -- snoop for CDB
       for i in 0 to num_entries-1 loop
         next_entries_operand0_source(i) := cdb_size;
-        for j in 0 to cdb_size-1 loop
-          if cdb_in_available(j) = '1' and
-              cdb_in_tag(j) = entries_tag(i) then
-            next_entries_operand0_source(i) := j;
-          end if;
-        end loop;
+        if TO_X01(entries_operand0_available(i)) = 'X' then
+          assert entries_busy(i) /= '1'
+            report "RnSn for " & unit_name & ": " &
+                   "metavalue detected in entries_operand0_available(" &
+                   integer'image(i) & ")"
+              severity failure;
+        elsif entries_operand0_available(i) = '0' then
+          for j in 0 to cdb_size-1 loop
+            if cdb_in_available(j) = '1' and
+                cdb_in_tag(j) = entries_operand0_tag(i) then
+              next_entries_operand0_source(i) := j;
+            end if;
+          end loop;
+        end if;
         if next_entries_operand0_source(i) = cdb_size then
           next_entries_operand0_available(i) := entries_operand0_available(i);
           next_entries_operand0_value(i) := entries_operand0_value(i);
         else
+          assert not debug_out
+            report "RnSn for " & unit_name & ": " &
+                   "entry tag " & integer'image(to_integer(entries_tag(i))) &
+                   ": found operand0 from CDB (tag " &
+                    integer'image(to_integer(entries_operand0_tag(i))) & ")"
+              severity note;
           next_entries_operand0_available(i) := '1';
           next_entries_operand0_value(i) :=
             cdb_in_value(next_entries_operand0_source(i));
         end if;
 
         next_entries_operand1_source(i) := cdb_size;
-        for j in 0 to cdb_size-1 loop
-          if cdb_in_available(j) = '1' and
-              cdb_in_tag(j) = entries_tag(i) then
-            next_entries_operand1_source(i) := j;
-          end if;
-        end loop;
+        if TO_X01(entries_operand1_available(i)) = 'X' then
+          assert entries_busy(i) /= '1'
+            report "RnSn for " & unit_name & ": " &
+                   "metavalue detected in entries_operand1_available(" &
+                   integer'image(i) & ")"
+              severity failure;
+        elsif entries_operand1_available(i) = '0' then
+          for j in 0 to cdb_size-1 loop
+            if cdb_in_available(j) = '1' and
+                cdb_in_tag(j) = entries_operand1_tag(i) then
+              next_entries_operand1_source(i) := j;
+            end if;
+          end loop;
+        end if;
         if next_entries_operand1_source(i) = cdb_size then
           next_entries_operand1_available(i) := entries_operand1_available(i);
           next_entries_operand1_value(i) := entries_operand1_value(i);
         else
+          assert not debug_out
+            report "RnSn for " & unit_name & ": " &
+                   "entry tag " & integer'image(to_integer(entries_tag(i))) &
+                   ": found operand0 from CDB (tag " &
+                    integer'image(to_integer(entries_operand0_tag(i))) & ")"
+              severity note;
           next_entries_operand1_available(i) := '1';
           next_entries_operand1_value(i) :=
             cdb_in_value(next_entries_operand1_source(i));
@@ -235,7 +265,15 @@ begin
           assert not debug_out
             report "RnSn for " & unit_name & ": " &
                    "dispatch (tag = " &
-                     integer'image(to_integer(dispatch_tag)) & ")"
+                     integer'image(to_integer(dispatch_tag)) & ", " &
+                     "o0 = " &
+                       str_of_value_or_tag(dispatch_operand0_available,
+                                           dispatch_operand0_value,
+                                           dispatch_operand0_tag) & ", " &
+                     "o1 = " &
+                       str_of_value_or_tag(dispatch_operand1_available,
+                                           dispatch_operand1_value,
+                                           dispatch_operand1_tag) & ")"
               severity note;
           entries_busy(i) <= '1';
           entries_tag(i) <= dispatch_tag;

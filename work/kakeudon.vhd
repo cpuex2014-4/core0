@@ -68,7 +68,13 @@ package kakeudon is
       rob_top_dest : out internal_register_t;
       rob_top_value : out unsigned(31 downto 0);
       rob_bottom : out tomasulo_tag_t;
-      complete : in std_logic);
+      rob_rd0_tag : in tomasulo_tag_t;
+      rob_rd0_ready : out std_logic;
+      rob_rd0_value : out unsigned(31 downto 0);
+      rob_rd1_tag : in tomasulo_tag_t;
+      rob_rd1_ready : out std_logic;
+      rob_rd1_value : out unsigned(31 downto 0);
+      commit : in std_logic);
   end component reorder_buffer;
 
   component core is
@@ -271,6 +277,8 @@ package kakeudon is
   constant ALU_OP_SRA  : alu_opcode_t := 2#1111#;
 
   function name_of_internal_register(r:internal_register_t) return string;
+  function str_of_value_or_tag(available:std_logic;
+    value:unsigned_word; tag:tomasulo_tag_t) return string;
 
   function bin_of_int(i:natural; l:natural) return string;
   function hex_of_word(u:unsigned(31 downto 0)) return string;
@@ -339,6 +347,23 @@ package body kakeudon is
       return "$" & integer'image(to_integer(r));
     end if;
   end function name_of_internal_register;
+
+  function str_of_value_or_tag(available:std_logic;
+    value:unsigned_word; tag:tomasulo_tag_t) return string is
+  begin
+    if TO_X01(available) = 'X' then
+      return "UNKNOWN_AVAILABLE_BIT";
+    elsif available = '1' then
+      return hex_of_word(value);
+    else
+      if TO_01(tag, 'X')(0) = 'X' then
+        return "tag(X)";
+      else
+        return "tag(" & integer'image(to_integer(tag)) & ")";
+      end if;
+    end if;
+  end function str_of_value_or_tag;
+
   function bin_of_int(i:natural; l:natural) return string is
   begin
     if l <= 0 then

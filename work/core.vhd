@@ -104,10 +104,14 @@ architecture behavioral of core is
   signal rob_top_value : unsigned(31 downto 0);
   signal rob_bottom : tomasulo_tag_t;
   signal rob_dispatchable : std_logic;
+  signal dispatch_operand0_rob_ready : std_logic;
+  signal dispatch_operand0_rob_value : unsigned(31 downto 0);
+  signal dispatch_operand1_rob_ready : std_logic;
+  signal dispatch_operand1_rob_value : unsigned(31 downto 0);
 
-  -- complete
-  signal calc_complete : std_logic;
-  signal any_complete : std_logic;
+  -- commit
+  signal calc_commit : std_logic;
+  signal any_commit: std_logic;
 begin
   instruction_register <=
     (others => 'X') when TO_01(instruction_selector, 'X')(0) = 'X' else
@@ -344,32 +348,86 @@ begin
     rob_top_dest => rob_top_dest,
     rob_top_value => rob_top_value,
     rob_bottom => rob_bottom,
-    complete => any_complete);
+    rob_rd0_tag => dispatch_operand0_tag_reg,
+    rob_rd0_ready => dispatch_operand0_rob_ready,
+    rob_rd0_value => dispatch_operand0_rob_value,
+    rob_rd1_tag => dispatch_operand1_tag_reg,
+    rob_rd1_ready => dispatch_operand1_rob_ready,
+    rob_rd1_value => dispatch_operand1_rob_value,
+    commit => any_commit);
 
-  dispatch_operand0_available <=
-    'X' when TO_X01(operand0_use_immediate) = 'X' else
-    '1' when operand0_use_immediate = '1' else
-    dispatch_operand0_available_reg;
-  dispatch_operand0_value <=
-    (others => 'X') when TO_X01(operand0_use_immediate) = 'X' else
-    operand0_immediate_val when operand0_use_immediate = '1' else
-    dispatch_operand0_value_reg;
-  dispatch_operand0_tag <=
-    (others => 'X') when TO_X01(operand0_use_immediate) = 'X' else
-    (others => '-') when operand0_use_immediate = '1' else
-    dispatch_operand0_tag_reg;
-  dispatch_operand1_available <=
-    'X' when TO_X01(operand1_use_immediate) = 'X' else
-    '1' when operand1_use_immediate = '1' else
-    dispatch_operand1_available_reg;
-  dispatch_operand1_value <=
-    (others => 'X') when TO_X01(operand1_use_immediate) = 'X' else
-    operand1_immediate_val when operand1_use_immediate = '1' else
-    dispatch_operand1_value_reg;
-  dispatch_operand1_tag <=
-    (others => 'X') when TO_X01(operand1_use_immediate) = 'X' else
-    (others => '-') when operand1_use_immediate = '1' else
-    dispatch_operand1_tag_reg;
+  update_dispatch_operand0_available :
+  process(operand0_use_immediate, dispatch_operand0_available_reg,
+    dispatch_operand0_value_reg, dispatch_operand0_tag_reg,
+    operand0_immediate_val, dispatch_operand0_rob_ready,
+    dispatch_operand0_rob_value)
+  begin
+    if TO_X01(operand0_use_immediate) = 'X' then
+      dispatch_operand0_available <= 'X';
+      dispatch_operand0_value <= (others => 'X');
+      dispatch_operand0_tag <= (others => 'X');
+    elsif operand0_use_immediate = '1' then
+      dispatch_operand0_available <= '1';
+      dispatch_operand0_value <= operand0_immediate_val;
+      dispatch_operand0_tag <= (others => '-');
+    elsif TO_X01(dispatch_operand0_available_reg) = 'X' then
+      dispatch_operand0_available <= 'X';
+      dispatch_operand0_value <= (others => 'X');
+      dispatch_operand0_tag <= (others => 'X');
+    elsif dispatch_operand0_available_reg = '1' then
+      dispatch_operand0_available <= dispatch_operand0_available_reg;
+      dispatch_operand0_value <= dispatch_operand0_value_reg;
+      dispatch_operand0_tag <= dispatch_operand0_tag_reg;
+    elsif TO_X01(dispatch_operand0_rob_ready) = 'X' then
+      dispatch_operand0_available <= 'X';
+      dispatch_operand0_value <= (others => 'X');
+      dispatch_operand0_tag <= (others => 'X');
+    elsif dispatch_operand0_rob_ready = '1' then
+      dispatch_operand0_available <= '1';
+      dispatch_operand0_value <= dispatch_operand0_rob_value;
+      dispatch_operand0_tag <= (others => '-');
+    else
+      dispatch_operand0_available <= dispatch_operand0_available_reg;
+      dispatch_operand0_value <= dispatch_operand0_value_reg;
+      dispatch_operand0_tag <= dispatch_operand0_tag_reg;
+    end if;
+  end process update_dispatch_operand0_available;
+  update_dispatch_operand1_available :
+  process(operand1_use_immediate, dispatch_operand1_available_reg,
+    dispatch_operand1_value_reg, dispatch_operand1_tag_reg,
+    operand1_immediate_val, dispatch_operand1_rob_ready,
+    dispatch_operand1_rob_value)
+  begin
+    if TO_X01(operand1_use_immediate) = 'X' then
+      dispatch_operand1_available <= 'X';
+      dispatch_operand1_value <= (others => 'X');
+      dispatch_operand1_tag <= (others => 'X');
+    elsif operand1_use_immediate = '1' then
+      dispatch_operand1_available <= '1';
+      dispatch_operand1_value <= operand1_immediate_val;
+      dispatch_operand1_tag <= (others => '-');
+    elsif TO_X01(dispatch_operand1_available_reg) = 'X' then
+      dispatch_operand1_available <= 'X';
+      dispatch_operand1_value <= (others => 'X');
+      dispatch_operand1_tag <= (others => 'X');
+    elsif dispatch_operand1_available_reg = '1' then
+      dispatch_operand1_available <= dispatch_operand1_available_reg;
+      dispatch_operand1_value <= dispatch_operand1_value_reg;
+      dispatch_operand1_tag <= dispatch_operand1_tag_reg;
+    elsif TO_X01(dispatch_operand1_rob_ready) = 'X' then
+      dispatch_operand1_available <= 'X';
+      dispatch_operand1_value <= (others => 'X');
+      dispatch_operand1_tag <= (others => 'X');
+    elsif dispatch_operand1_rob_ready = '1' then
+      dispatch_operand1_available <= '1';
+      dispatch_operand1_value <= dispatch_operand1_rob_value;
+      dispatch_operand1_tag <= (others => '-');
+    else
+      dispatch_operand1_available <= dispatch_operand1_available_reg;
+      dispatch_operand1_value <= dispatch_operand1_value_reg;
+      dispatch_operand1_tag <= dispatch_operand1_tag_reg;
+    end if;
+  end process update_dispatch_operand1_available;
 
   any_dispatch <= alu_dispatch; -- or foo_dispatch or ...
 
@@ -457,8 +515,8 @@ begin
     alu_in1 => alu_operand1,
     alu_out => cdb_value(0));
 
-  calc_complete <= rob_top_ready when rob_top_type = rob_type_calc else '0';
-  any_complete <= calc_complete;
+  calc_commit <= rob_top_ready when rob_top_type = rob_type_calc else '0';
+  any_commit <= calc_commit;
 
   cdb_inspect : process(clk, rst)
   begin
