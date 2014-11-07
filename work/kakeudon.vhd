@@ -30,6 +30,7 @@ package kakeudon is
     port (
       clk : in std_logic;
       rst : in std_logic;
+      refetch : in std_logic;
       cdb_in_available : in std_logic_vector(0 to cdb_size-1);
       cdb_in_value : in cdb_in_value_t;
       cdb_in_tag : in cdb_in_tag_t;
@@ -63,10 +64,16 @@ package kakeudon is
       dispatch : in std_logic;
       dispatch_type : in rob_type_t;
       dispatch_dest : in internal_register_t;
-      rob_top_ready : out std_logic;
+      dispatch_branch_available : in std_logic;
+      dispatch_branch_value : in unsigned(31 downto 0);
+      dispatch_branch_tag : in tomasulo_tag_t;
+      dispatch_predicted_branch : in unsigned(31 downto 0);
+      rob_top_committable : out std_logic;
       rob_top_type : out rob_type_t;
       rob_top_dest : out internal_register_t;
       rob_top_value : out unsigned(31 downto 0);
+      refetch : out std_logic;
+      refetch_address : out unsigned(31 downto 0);
       rob_bottom : out tomasulo_tag_t;
       rob_rd0_tag : in tomasulo_tag_t;
       rob_rd0_ready : out std_logic;
@@ -123,6 +130,7 @@ package kakeudon is
     port (
       clk : in std_logic;
       rst : in std_logic;
+      refetch : in std_logic;
       cdb_in_available : in std_logic_vector(0 to cdb_size-1);
       cdb_in_value : in cdb_in_value_t;
       cdb_in_tag : in cdb_in_tag_t;
@@ -321,7 +329,7 @@ package kakeudon is
     x"1040fffd", -- beq $v0, $zero, rd_poll
     x"8d020004", -- lw $v0, 4($t0)
     x"304200ff", -- andi $v0, $v0, 0xff
-    x"03e00008",  -- jr $ra
+    x"03e00008", -- jr $ra
     others => (others => '0')
   );
 end package kakeudon;

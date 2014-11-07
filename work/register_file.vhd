@@ -10,6 +10,7 @@ entity register_file is
   port (
     clk : in std_logic;
     rst : in std_logic;
+    refetch : in std_logic;
     cdb_in_available : in std_logic_vector(0 to cdb_size-1);
     cdb_in_value : in cdb_in_value_t;
     cdb_in_tag : in cdb_in_tag_t;
@@ -31,11 +32,13 @@ end entity register_file;
 
 architecture behavioral of register_file is
   constant debug_out : boolean := true;
-  type reg_value_t is array(0 to 127) of unsigned_word;
+  constant num_entries : natural := 128;
+  type reg_value_t is array(0 to num_entries-1) of unsigned_word;
   signal reg_value : reg_value_t := (others => x"00000000");
-  type reg_tag_t is array(0 to 127) of tomasulo_tag_t;
+  type reg_tag_t is array(0 to num_entries-1) of tomasulo_tag_t;
   signal reg_tag : reg_tag_t;
-  signal reg_available : std_logic_vector(0 to 127) := (others => '1');
+  signal reg_available : std_logic_vector(0 to num_entries-1)
+    := (others => '1');
 begin
   update_rd0 :
   process(rd0_addr, reg_available, reg_value, reg_tag,
@@ -169,13 +172,18 @@ begin
             severity failure;
         if not (wr0_enable = '1' and wr0_addr = wr1_addr) then
           assert not debug_out
-            report name_of_internal_register(wr0_addr) &
+            report name_of_internal_register(wr1_addr) &
                    " <- " & hex_of_word(wr1_value)
               severity note;
           reg_available(to_integer(wr1_addr)) <= '1';
           reg_value(to_integer(wr1_addr)) <= wr1_value;
           reg_tag(to_integer(wr1_addr)) <= (others => '-');
         end if;
+      end if;
+      if refetch = '1' then
+        for i in 0 to num_entries-1 loop
+          reg_available(i) <= '1';
+        end loop;
       end if;
     end if;
   end process sequential;

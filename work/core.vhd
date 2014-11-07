@@ -47,10 +47,14 @@ architecture behavioral of core is
   signal program_counter : unsigned(29 downto 0)
     := "101111111100000000000000000000"; -- 0xBFC00000
 
+  signal refetch : std_logic;
+  signal refetch_address : unsigned(31 downto 0);
+
   -- instruction fetch
   signal program_counter_plus1 : unsigned(29 downto 0);
   signal instruction_selector : unsigned(1 downto 0);
   signal instruction_register : unsigned(31 downto 0);
+  signal instruction_predicted_branch : unsigned(29 downto 0);
   signal instruction_register_available : std_logic := '0';
 
   signal instruction_fetch_stall : std_logic := '0';
@@ -68,6 +72,10 @@ architecture behavioral of core is
   signal operand1_use_immediate : std_logic;
   signal destination_addr : internal_register_t;
   signal destination_enable : std_logic := '0';
+  signal decode_branch_available : std_logic;
+  signal decode_branch_value : unsigned(31 downto 0);
+  signal decode_branch_tag : tomasulo_tag_t;
+  signal decode_predicted_branch : unsigned(31 downto 0);
   signal decoded_instruction_available : std_logic := '0';
 
   signal decode_stall : std_logic := '0';
@@ -98,7 +106,7 @@ architecture behavioral of core is
   signal alu_operand1 : unsigned(31 downto 0);
 
   -- reorder buffer
-  signal rob_top_ready : std_logic;
+  signal rob_top_committable : std_logic;
   signal rob_top_type : rob_type_t;
   signal rob_top_dest : internal_register_t;
   signal rob_top_value : unsigned(31 downto 0);
@@ -136,9 +144,28 @@ begin
       program_counter <= "101111111100000000000000000000";
       program_counter_plus1 <= (others => '-');
       instruction_selector <= (others => '-');
+      instruction_predicted_branch <= (others => '-');
       instruction_register_available <= '0';
     elsif rising_edge(clk) then
-      if instruction_fetch_stall /= '1' then
+      assert TO_X01(refetch) /= 'X'
+        report "metavalue detected in refetch"
+          severity failure;
+      if refetch = '1' then
+        assert TO_01(refetch_address(1 downto 0), 'X')(0) /= 'X'
+          report "metavalue detected in refetch_address"
+            severity failure;
+        assert refetch_address(1 downto 0) = "00"
+          report "refetch_address(1 downto 0) is not 00"
+            severity failure;
+        assert not debug_instruction_fetch
+          report "refetch; address is " & hex_of_word(refetch_address)
+            severity note;
+        program_counter <= refetch_address(31 downto 2);
+        program_counter_plus1 <= (others => '-');
+        instruction_selector <= (others => '-');
+        instruction_predicted_branch <= (others => '-');
+        instruction_register_available <= '0';
+      elsif instruction_fetch_stall /= '1' then
         assert TO_01(program_counter, 'X')(0) /= 'X'
           report "metavalue detected in program_counter"
             severity failure;
@@ -154,6 +181,7 @@ begin
         end if;
         program_counter <= program_counter + 1;
         program_counter_plus1 <= program_counter + 1;
+        instruction_predicted_branch <= program_counter + 1;
         instruction_register_available <= '1';
       end if;
     end if;
@@ -167,6 +195,8 @@ begin
   decode_sequential : process(clk, rst)
     variable d_opcode : opcode_t;
     variable d_funct : funct_t;
+    constant d_zero : internal_register_t := "0000000";
+    constant d_ra : internal_register_t := "0011111";
     variable d_rs : internal_register_t;
     variable d_rt : internal_register_t;
     variable d_rd : internal_register_t;
@@ -191,6 +221,9 @@ begin
     variable next_operand1_immediate_val : unsigned(31 downto 0);
     variable next_destination_enable : std_logic;
     variable next_destination_addr : internal_register_t;
+    variable next_decode_branch_available : std_logic;
+    variable next_decode_branch_value : unsigned(31 downto 0);
+    variable next_decode_branch_tag : tomasulo_tag_t;
     variable next_decoded_instruction_available : std_logic;
   begin
     if rst = '1' then
@@ -205,9 +238,24 @@ begin
       operand1_immediate_val <= (others => '-');
       destination_enable <= '0';
       destination_addr <= (others => '-');
+      decode_predicted_branch <= (others => '-');
       decoded_instruction_available <= '0';
     elsif rising_edge(clk) then
-      if instruction_register_available = '1' and decode_stall /= '1' then
+      if refetch = '1' then
+        decode_rob_type <= rob_type_calc; -- don't care
+        unit_id <= unit_alu; -- don't care
+        unit_operation <= (others => '-');
+        operand0_use_immediate <= '-';
+        operand0_addr <= (others => '-');
+        operand0_immediate_val <= (others => '-');
+        operand1_use_immediate <= '-';
+        operand1_addr <= (others => '-');
+        operand1_immediate_val <= (others => '-');
+        destination_enable <= '0';
+        destination_addr <= (others => '-');
+        decode_predicted_branch <= (others => '-');
+        decoded_instruction_available <= '0';
+      elsif instruction_register_available = '1' and decode_stall /= '1' then
         next_decode_rob_type := rob_type_calc; -- don't care
         next_unit_id := unit_alu; -- don't care
         next_unit_operation := (others => '-');
@@ -219,6 +267,9 @@ begin
         next_operand1_immediate_val := (others => '-');
         next_destination_enable := '-';
         next_destination_addr := (others => '-');
+        next_decode_branch_available := '-';
+        next_decode_branch_value := (others => '-');
+        next_decode_branch_tag := (others => '-');
         next_decoded_instruction_available := '-';
 
         assert TO_01(instruction_register, 'X')(0) /= 'X'
@@ -252,6 +303,8 @@ begin
             next_operand1_addr := d_rt;
             next_destination_enable := '1';
             next_destination_addr := d_rd;
+            next_decode_branch_available := '1';
+            next_decode_branch_value := program_counter_plus1 & "00";
             next_decoded_instruction_available := '1';
           when FUNCT_OR =>
             next_decode_rob_type := rob_type_calc;
@@ -265,6 +318,8 @@ begin
             next_operand1_use_immediate := '0';
             next_destination_enable := '1';
             next_destination_addr := d_rd;
+            next_decode_branch_available := '1';
+            next_decode_branch_value := program_counter_plus1 & "00";
             next_decoded_instruction_available := '1';
           when others =>
             report "unknown SPECIAL funct " & bin_of_int(d_funct,6)
@@ -281,20 +336,39 @@ begin
           next_operand1_immediate_val := d_sign_ext_imm;
           next_destination_enable := '1';
           next_destination_addr := d_rt;
+          next_decode_branch_available := '1';
+          next_decode_branch_value := program_counter_plus1 & "00";
+          next_decoded_instruction_available := '1';
+        when OP_LUI =>
+          next_decode_rob_type := rob_type_calc;
+          next_unit_id := unit_alu;
+          next_unit_operation :=
+            to_unsigned(ALU_OP_SLL, unit_operation'length);
+          next_operand0_use_immediate := '1';
+          next_operand0_immediate_val :=
+            to_unsigned(16, operand0_immediate_val'length);
+          next_operand1_use_immediate := '1';
+          next_operand1_immediate_val := d_zero_ext_imm;
+          next_destination_enable := '1';
+          next_destination_addr := d_rt;
+          next_decode_branch_available := '1';
+          next_decode_branch_value := program_counter_plus1 & "00";
           next_decoded_instruction_available := '1';
         when OP_JAL =>
-          report "TODO: correct control signal" severity error;
-          -- TODO: correct control signal
-          next_decode_rob_type := rob_type_calc;
+          next_decode_rob_type := rob_type_branch;
           next_unit_id := unit_alu;
           next_unit_operation :=
             to_unsigned(ALU_OP_ADDU, unit_operation'length);
           next_operand0_use_immediate := '0';
-          next_operand0_addr := d_rs;
+          next_operand0_addr := d_zero;
           next_operand1_use_immediate := '1';
-          next_operand1_immediate_val := d_sign_ext_imm;
+          next_operand1_immediate_val := program_counter_plus1 & "00";
           next_destination_enable := '1';
-          next_destination_addr := d_rt;
+          next_destination_addr := d_ra;
+          next_decode_branch_available := '1';
+          next_decode_branch_value :=
+            program_counter_plus1(29 downto 26) &
+            instruction_register(25 downto 0) & "00";
           next_decoded_instruction_available := '1';
         when others =>
           report "unknown opcode " & bin_of_int(d_opcode,6)
@@ -311,6 +385,10 @@ begin
         operand1_immediate_val <= next_operand1_immediate_val;
         destination_enable <= next_destination_enable;
         destination_addr <= next_destination_addr;
+        decode_branch_available <= next_decode_branch_available;
+        decode_branch_value <= next_decode_branch_value;
+        decode_branch_tag <= next_decode_branch_tag;
+        decode_predicted_branch <= instruction_predicted_branch & "00";
         decoded_instruction_available <= next_decoded_instruction_available;
       elsif decode_stall /= '1' then
         decode_rob_type <= rob_type_calc; -- don't care
@@ -324,6 +402,10 @@ begin
         operand1_immediate_val <= (others => '-');
         destination_enable <= '0';
         destination_addr <= (others => '-');
+        decode_branch_available <= '-';
+        decode_branch_value <= (others => '-');
+        decode_branch_tag <= (others => '-');
+        decode_predicted_branch <= (others => '-');
         decoded_instruction_available <= '0';
       end if;
     end if;
@@ -343,10 +425,16 @@ begin
     dispatch => any_dispatch,
     dispatch_type => decode_rob_type,
     dispatch_dest => destination_addr,
-    rob_top_ready => rob_top_ready,
+    dispatch_branch_available => decode_branch_available,
+    dispatch_branch_value => decode_branch_value,
+    dispatch_branch_tag => decode_branch_tag,
+    dispatch_predicted_branch => decode_predicted_branch,
+    rob_top_committable => rob_top_committable,
     rob_top_type => rob_top_type,
     rob_top_dest => rob_top_dest,
     rob_top_value => rob_top_value,
+    refetch => refetch,
+    refetch_address => refetch_address,
     rob_bottom => rob_bottom,
     rob_rd0_tag => dispatch_operand0_tag_reg,
     rob_rd0_ready => dispatch_operand0_rob_ready,
@@ -454,6 +542,7 @@ begin
   port map (
     clk => clk,
     rst => rst,
+    refetch => refetch,
     cdb_in_available => cdb_available,
     cdb_in_value => cdb_value,
     cdb_in_tag => cdb_tag,
@@ -469,7 +558,7 @@ begin
     wr0_enable => wr0_enable,
     wr0_tag => rob_bottom,
     wr1_addr => rob_top_dest,
-    wr1_enable => rob_top_ready,
+    wr1_enable => rob_top_committable,
     wr1_value => rob_top_value);
 
   alu_dispatch <=
@@ -487,6 +576,7 @@ begin
   port map (
     clk => clk,
     rst => rst,
+    refetch => refetch,
     cdb_in_available => cdb_available,
     cdb_in_value => cdb_value,
     cdb_in_tag => cdb_tag,
@@ -515,7 +605,7 @@ begin
     alu_in1 => alu_operand1,
     alu_out => cdb_value(0));
 
-  calc_commit <= rob_top_ready when rob_top_type = rob_type_calc else '0';
+  calc_commit <= rob_top_committable when rob_top_type = rob_type_calc else '0';
   any_commit <= calc_commit;
 
   cdb_inspect : process(clk, rst)

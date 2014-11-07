@@ -14,6 +14,7 @@ entity reservation_station is
   port (
     clk : in std_logic;
     rst : in std_logic;
+    refetch : in std_logic;
     cdb_in_available : in std_logic_vector(0 to cdb_size-1);
     cdb_in_value : in cdb_in_value_t;
     cdb_in_tag : in cdb_in_tag_t;
@@ -96,8 +97,21 @@ begin
     variable next_issuable_tag : entry_select_t;
   begin
     if rst = '1' then
+      issue <= '0';
+      issue_opcode <= (others => '-');
+      issue_operand0 <= (others => '-');
+      issue_operand1 <= (others => '-');
       broadcast_available_queue <= (others => '0');
+      broadcast_tag_queue <= (others => (others => '-'));
       entries_busy <= (others => '0');
+      entries_tag <= (others => (others => '-'));
+      entries_opcode <= (others => (others => '-'));
+      entries_operand0_available <= (others => '-');
+      entries_operand0_value <= (others => (others => '-'));
+      entries_operand0_tag <= (others => (others => '-'));
+      entries_operand1_available <= (others => '-');
+      entries_operand1_value <= (others => (others => '-'));
+      entries_operand1_tag <= (others => (others => '-'));
     elsif rising_edge(clk) then
       -- assertions
       assert TO_X01(dispatch) /= 'X'
@@ -161,21 +175,30 @@ begin
         end if;
       end loop;
 
-      -- issue
-      issue <= entries_issuable_any;
-      issue_opcode <= entries_issue_opcode(0);
-      issue_operand0 <= entries_issue_operand0(0);
-      issue_operand1 <= entries_issue_operand1(0);
-      broadcast_available_queue(0) <= entries_issuable_any;
-      broadcast_tag_queue(0) <= entries_issue_tag(0);
-      if entries_issuable_any = '1' then
-        assert not debug_out
-          report "RnSn for " & unit_name & ": " &
-                 "issue (tag = " &
-                   integer'image(to_integer(entries_issue_tag(0))) & ", " &
-                   "o0 = " & hex_of_word(entries_issue_operand0(0)) & ", " &
-                   "o1 = " & hex_of_word(entries_issue_operand1(0)) & ")"
-            severity note;
+      if refetch = '1' then
+        issue <= '0';
+        issue_opcode <= (others => '-');
+        issue_operand0 <= (others => '-');
+        issue_operand1 <= (others => '-');
+        broadcast_available_queue(0) <= '0';
+        broadcast_tag_queue(0) <= (others => '-');
+      else
+        -- issue
+        issue <= entries_issuable_any;
+        issue_opcode <= entries_issue_opcode(0);
+        issue_operand0 <= entries_issue_operand0(0);
+        issue_operand1 <= entries_issue_operand1(0);
+        broadcast_available_queue(0) <= entries_issuable_any;
+        broadcast_tag_queue(0) <= entries_issue_tag(0);
+        if entries_issuable_any = '1' then
+          assert not debug_out
+            report "RnSn for " & unit_name & ": " &
+                   "issue (tag = " &
+                     integer'image(to_integer(entries_issue_tag(0))) & ", " &
+                     "o0 = " & hex_of_word(entries_issue_operand0(0)) & ", " &
+                     "o1 = " & hex_of_word(entries_issue_operand1(0)) & ")"
+              severity note;
+        end if;
       end if;
 
       -- snoop for CDB
@@ -241,90 +264,109 @@ begin
         end if;
       end loop;
 
-      -- dispatch and shift
-      for i in 0 to num_entries-1 loop
-        if dispatch = '1' and
-           ((entries_issuable_any = '1' and
-            entries_busy(i) = '1' and
-            (i = num_entries-1 or entries_busy(i+1) = '0')) or
-           (entries_issuable_any = '0' and
-            entries_busy(i) = '0' and
-            (i = 0 or entries_busy(i-1) = '1'))) then
-          assert TO_01(dispatch_tag, 'X')(0) /= 'X'
-            report "RnSn for " & unit_name & ": " &
-                   "metavalue detected in dispatch_tag"
-              severity failure;
-          assert TO_X01(dispatch_operand0_available) /= 'X'
-            report "RnSn for " & unit_name & ": " &
-                   "metavalue detected in dispatch_operand0_available"
-              severity failure;
-          assert TO_X01(dispatch_operand1_available) /= 'X'
-            report "RnSn for " & unit_name & ": " &
-                   "metavalue detected in dispatch_operand1_available"
-              severity failure;
-          assert not debug_out
-            report "RnSn for " & unit_name & ": " &
-                   "dispatch (tag = " &
-                     integer'image(to_integer(dispatch_tag)) & ", " &
-                     "o0 = " &
-                       str_of_value_or_tag(dispatch_operand0_available,
-                                           dispatch_operand0_value,
-                                           dispatch_operand0_tag) & ", " &
-                     "o1 = " &
-                       str_of_value_or_tag(dispatch_operand1_available,
-                                           dispatch_operand1_value,
-                                           dispatch_operand1_tag) & ")"
-              severity note;
-          entries_busy(i) <= '1';
-          entries_tag(i) <= dispatch_tag;
-          entries_opcode(i) <= dispatch_opcode;
-          entries_operand0_available(i) <= dispatch_operand0_available;
-          entries_operand0_value(i) <= dispatch_operand0_value;
-          entries_operand0_tag(i) <= dispatch_operand0_tag;
-          entries_operand1_available(i) <= dispatch_operand1_available;
-          entries_operand1_value(i) <= dispatch_operand1_value;
-          entries_operand1_tag(i) <= dispatch_operand1_tag;
-        elsif entries_issuable_accum(i) = '1' then
-          if i = num_entries-1 then
-            entries_busy(i) <= '0';
-            entries_tag(i) <= (others => '-');
-            entries_opcode(i) <= (others => '-');
-            entries_operand0_available(i) <= '-';
-            entries_operand0_value(i) <= (others => '-');
-            entries_operand0_tag(i) <= (others => '-');
-            entries_operand1_available(i) <= '-';
-            entries_operand1_value(i) <= (others => '-');
-            entries_operand1_tag(i) <= (others => '-');
-          else
-            entries_busy(i) <= entries_busy(i+1);
-            entries_tag(i) <= entries_tag(i+1);
-            entries_opcode(i) <= entries_opcode(i+1);
-            entries_operand0_available(i) <=
-              next_entries_operand0_available(i+1);
-            entries_operand0_value(i) <= next_entries_operand0_value(i+1);
-            entries_operand0_tag(i) <= entries_operand0_tag(i+1);
-            entries_operand1_available(i) <=
-              next_entries_operand1_available(i+1);
-            entries_operand1_value(i) <= next_entries_operand1_value(i+1);
-            entries_operand1_tag(i) <= entries_operand1_tag(i+1);
-          end if;
-        else
-          entries_busy(i) <= entries_busy(i);
-          entries_tag(i) <= entries_tag(i);
-          entries_opcode(i) <= entries_opcode(i);
-          entries_operand0_available(i) <= next_entries_operand0_available(i);
-          entries_operand0_value(i) <= next_entries_operand0_value(i);
-          entries_operand0_tag(i) <= entries_operand0_tag(i);
-          entries_operand1_available(i) <= next_entries_operand1_available(i);
-          entries_operand1_value(i) <= next_entries_operand1_value(i);
-          entries_operand1_tag(i) <= entries_operand1_tag(i);
-        end if;
-      end loop;
+      if refetch = '1' then
+        for i in 0 to num_entries-1 loop
+          entries_busy(i) <= '0';
+          entries_tag(i) <= (others => '-');
+          entries_opcode(i) <= (others => '-');
+          entries_operand0_available(i) <= '-';
+          entries_operand0_value(i) <= (others => '-');
+          entries_operand0_tag(i) <= (others => '-');
+          entries_operand1_available(i) <= '-';
+          entries_operand1_value(i) <= (others => '-');
+          entries_operand1_tag(i) <= (others => '-');
+        end loop;
 
-      for i in 0 to latency-2 loop
-        broadcast_available_queue(i+1) <= broadcast_available_queue(i);
-        broadcast_tag_queue(i+1) <= broadcast_tag_queue(i);
-      end loop;
+        for i in 0 to latency-2 loop
+          broadcast_available_queue(i+1) <= '0';
+          broadcast_tag_queue(i+1) <= (others => '-');
+        end loop;
+      else
+        -- dispatch and shift
+        for i in 0 to num_entries-1 loop
+          if dispatch = '1' and
+             ((entries_issuable_any = '1' and
+              entries_busy(i) = '1' and
+              (i = num_entries-1 or entries_busy(i+1) = '0')) or
+             (entries_issuable_any = '0' and
+              entries_busy(i) = '0' and
+              (i = 0 or entries_busy(i-1) = '1'))) then
+            assert TO_01(dispatch_tag, 'X')(0) /= 'X'
+              report "RnSn for " & unit_name & ": " &
+                     "metavalue detected in dispatch_tag"
+                severity failure;
+            assert TO_X01(dispatch_operand0_available) /= 'X'
+              report "RnSn for " & unit_name & ": " &
+                     "metavalue detected in dispatch_operand0_available"
+                severity failure;
+            assert TO_X01(dispatch_operand1_available) /= 'X'
+              report "RnSn for " & unit_name & ": " &
+                     "metavalue detected in dispatch_operand1_available"
+                severity failure;
+            assert not debug_out
+              report "RnSn for " & unit_name & ": " &
+                     "dispatch (tag = " &
+                       integer'image(to_integer(dispatch_tag)) & ", " &
+                       "o0 = " &
+                         str_of_value_or_tag(dispatch_operand0_available,
+                                             dispatch_operand0_value,
+                                             dispatch_operand0_tag) & ", " &
+                       "o1 = " &
+                         str_of_value_or_tag(dispatch_operand1_available,
+                                             dispatch_operand1_value,
+                                             dispatch_operand1_tag) & ")"
+                severity note;
+            entries_busy(i) <= '1';
+            entries_tag(i) <= dispatch_tag;
+            entries_opcode(i) <= dispatch_opcode;
+            entries_operand0_available(i) <= dispatch_operand0_available;
+            entries_operand0_value(i) <= dispatch_operand0_value;
+            entries_operand0_tag(i) <= dispatch_operand0_tag;
+            entries_operand1_available(i) <= dispatch_operand1_available;
+            entries_operand1_value(i) <= dispatch_operand1_value;
+            entries_operand1_tag(i) <= dispatch_operand1_tag;
+          elsif entries_issuable_accum(i) = '1' then
+            if i = num_entries-1 then
+              entries_busy(i) <= '0';
+              entries_tag(i) <= (others => '-');
+              entries_opcode(i) <= (others => '-');
+              entries_operand0_available(i) <= '-';
+              entries_operand0_value(i) <= (others => '-');
+              entries_operand0_tag(i) <= (others => '-');
+              entries_operand1_available(i) <= '-';
+              entries_operand1_value(i) <= (others => '-');
+              entries_operand1_tag(i) <= (others => '-');
+            else
+              entries_busy(i) <= entries_busy(i+1);
+              entries_tag(i) <= entries_tag(i+1);
+              entries_opcode(i) <= entries_opcode(i+1);
+              entries_operand0_available(i) <=
+                next_entries_operand0_available(i+1);
+              entries_operand0_value(i) <= next_entries_operand0_value(i+1);
+              entries_operand0_tag(i) <= entries_operand0_tag(i+1);
+              entries_operand1_available(i) <=
+                next_entries_operand1_available(i+1);
+              entries_operand1_value(i) <= next_entries_operand1_value(i+1);
+              entries_operand1_tag(i) <= entries_operand1_tag(i+1);
+            end if;
+          else
+            entries_busy(i) <= entries_busy(i);
+            entries_tag(i) <= entries_tag(i);
+            entries_opcode(i) <= entries_opcode(i);
+            entries_operand0_available(i) <= next_entries_operand0_available(i);
+            entries_operand0_value(i) <= next_entries_operand0_value(i);
+            entries_operand0_tag(i) <= entries_operand0_tag(i);
+            entries_operand1_available(i) <= next_entries_operand1_available(i);
+            entries_operand1_value(i) <= next_entries_operand1_value(i);
+            entries_operand1_tag(i) <= entries_operand1_tag(i);
+          end if;
+        end loop;
+
+        for i in 0 to latency-2 loop
+          broadcast_available_queue(i+1) <= broadcast_available_queue(i);
+          broadcast_tag_queue(i+1) <= broadcast_tag_queue(i);
+        end loop;
+      end if;
     end if;
   end process sequential;
 
