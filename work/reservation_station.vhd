@@ -193,7 +193,10 @@ begin
         if entries_issuable_any = '1' then
           assert not debug_out
             report "RnSn for " & unit_name & ": " &
-                   "issue (tag = " &
+                   "issue (opcode = " &
+                     bin_of_int(to_integer(entries_issue_opcode(0)),
+                       opcode_len) & ", " &
+                     "tag = " &
                      integer'image(to_integer(entries_issue_tag(0))) & ", " &
                      "o0 = " & hex_of_word(entries_issue_operand0(0)) & ", " &
                      "o1 = " & hex_of_word(entries_issue_operand1(0)) & ")"
@@ -305,7 +308,10 @@ begin
                 severity failure;
             assert not debug_out
               report "RnSn for " & unit_name & ": " &
-                     "dispatch (tag = " &
+                     "dispatch (opcode = " &
+                       bin_of_int(to_integer(dispatch_opcode), opcode_len) &
+                         ", " &
+                       "tag = " &
                        integer'image(to_integer(dispatch_tag)) & ", " &
                        "o0 = " &
                          str_of_value_or_tag(dispatch_operand0_available,

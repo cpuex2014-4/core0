@@ -10,7 +10,7 @@ package kakeudon is
   subtype internal_register_t is unsigned(6 downto 0);
   subtype tomasulo_tag_t is unsigned(3 downto 0);
 
-  constant cdb_size : natural := 1;
+  constant cdb_size : natural := 2;
   subtype cdb_id_t is integer range 0 to cdb_size-1;
   subtype cdb_extended_id_t is integer range 0 to cdb_size;
 
@@ -83,6 +83,29 @@ package kakeudon is
       rob_rd1_value : out unsigned(31 downto 0);
       commit : in std_logic);
   end component reorder_buffer;
+
+  component load_store_buffer is
+    generic (
+      num_stage1_entries : natural);
+    port (
+      clk : in std_logic;
+      rst : in std_logic;
+      refetch : in std_logic;
+      cdb_in_available : in std_logic_vector(0 to cdb_size-1);
+      cdb_in_value : in cdb_in_value_t;
+      cdb_in_tag : in cdb_in_tag_t;
+      dispatch_isstore : in std_logic;
+      dispatch_operand0_available : in std_logic;
+      dispatch_operand0_value : in unsigned_word;
+      dispatch_operand0_tag : in tomasulo_tag_t;
+      dispatch_operand1_available : in std_logic;
+      dispatch_operand1_value : in unsigned_word;
+      dispatch_operand1_tag : in tomasulo_tag_t;
+      dispatch_operand2 : in unsigned_word;
+      dispatch : in std_logic;
+      dispatch_tag : in tomasulo_tag_t;
+      dispatchable : out std_logic := '1');
+  end component load_store_buffer;
 
   component core is
     port (
