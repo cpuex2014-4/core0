@@ -87,6 +87,7 @@ architecture behavioral of core is
   signal dispatch_operand1_reg : value_or_tag_t;
   signal dispatch_operand1 : value_or_tag_t;
   signal dispatch_operand2 : unsigned_word;
+  signal dispatch_operands_2 : value_or_tag_array_t(0 to 1);
   signal wr0_enable : std_logic;
 
   signal any_dispatch : std_logic;
@@ -99,8 +100,7 @@ architecture behavioral of core is
   signal alu_available : std_logic;
   signal alu_issue : std_logic;
   signal alu_opcode : unsigned(3 downto 0);
-  signal alu_operand0 : unsigned(31 downto 0);
-  signal alu_operand1 : unsigned(31 downto 0);
+  signal alu_operands : unsigned_word_array_t(0 to 1);
 
   -- reorder buffer
   signal rob_top_committable : std_logic;
@@ -494,6 +494,8 @@ begin
 
   dispatch_operand2 <= operand2_immediate_val;
 
+  dispatch_operands_2 <= (dispatch_operand0, dispatch_operand1);
+
   any_dispatch <= mem_dispatch or alu_dispatch;
 
   dispatch_combinational :
@@ -574,6 +576,7 @@ begin
     unit_name => "alu",
     latency => 1,
     num_entries => 2,
+    num_operands => 2,
     opcode_len => 4)
   port map (
     clk => clk,
@@ -583,24 +586,22 @@ begin
     cdb_in_value => cdb_value,
     cdb_in_tag => cdb_tag,
     dispatch_opcode => unit_operation,
-    dispatch_operand0 => dispatch_operand0,
-    dispatch_operand1 => dispatch_operand1,
+    dispatch_operands => dispatch_operands_2,
     dispatch => alu_dispatch,
     dispatch_tag => rob_bottom,
     dispatchable => alu_dispatchable,
     unit_available => alu_available,
     issue => alu_issue,
     issue_opcode => alu_opcode,
-    issue_operand0 => alu_operand0,
-    issue_operand1 => alu_operand1,
+    issue_operands => alu_operands,
     broadcast_available => cdb_available(0),
     broadcast_tag => cdb_tag(0));
 
   alu_unit : alu
   port map (
     alu_opcode => alu_opcode,
-    alu_in0 => alu_operand0,
-    alu_in1 => alu_operand1,
+    alu_in0 => alu_operands(0),
+    alu_in1 => alu_operands(1),
     alu_out => cdb_value(0));
 
   calc_commit <= rob_top_committable when rob_top_type = rob_type_calc else '0';

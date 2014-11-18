@@ -25,6 +25,9 @@ package kakeudon is
     tag : tomasulo_tag_t;
   end record;
 
+  type value_or_tag_array_t is array(natural range <>) of value_or_tag_t;
+  type unsigned_word_array_t is array(natural range <>) of unsigned_word;
+
   attribute ram_style : string;
 
   component reservation_station is
@@ -32,6 +35,7 @@ package kakeudon is
       unit_name : string;
       latency : natural;
       num_entries : natural;
+      num_operands : natural;
       opcode_len : natural);
     port (
       clk : in std_logic;
@@ -41,16 +45,14 @@ package kakeudon is
       cdb_in_value : in cdb_in_value_t;
       cdb_in_tag : in cdb_in_tag_t;
       dispatch_opcode : in unsigned(opcode_len-1 downto 0);
-      dispatch_operand0 : in value_or_tag_t;
-      dispatch_operand1 : in value_or_tag_t;
+      dispatch_operands : in value_or_tag_array_t(0 to num_operands-1);
       dispatch : in std_logic;
       dispatch_tag : in tomasulo_tag_t;
       dispatchable : out std_logic := '1';
       unit_available : in std_logic;
       issue : out std_logic := '0';
       issue_opcode : out unsigned(opcode_len-1 downto 0);
-      issue_operand0 : out unsigned_word;
-      issue_operand1 : out unsigned_word;
+      issue_operands : out unsigned_word_array_t(0 to num_operands-1);
       broadcast_available : out std_logic;
       broadcast_tag : out tomasulo_tag_t);
   end component reservation_station;

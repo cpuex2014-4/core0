@@ -10,6 +10,7 @@ entity reservation_station is
     unit_name : string;
     latency : natural;
     num_entries : natural;
+    num_operands : natural;
     opcode_len : natural);
   port (
     clk : in std_logic;
@@ -19,16 +20,14 @@ entity reservation_station is
     cdb_in_value : in cdb_in_value_t;
     cdb_in_tag : in cdb_in_tag_t;
     dispatch_opcode : in unsigned(opcode_len-1 downto 0);
-    dispatch_operand0 : in value_or_tag_t;
-    dispatch_operand1 : in value_or_tag_t;
+    dispatch_operands : in value_or_tag_array_t(0 to num_operands-1);
     dispatch : in std_logic;
     dispatch_tag : in tomasulo_tag_t;
     dispatchable : out std_logic := '1';
     unit_available : in std_logic;
     issue : out std_logic := '0';
     issue_opcode : out unsigned(opcode_len-1 downto 0);
-    issue_operand0 : out unsigned_word;
-    issue_operand1 : out unsigned_word;
+    issue_operands : out unsigned_word_array_t(0 to num_operands-1);
     broadcast_available : out std_logic := '0';
     broadcast_tag : out tomasulo_tag_t);
 end entity reservation_station;
@@ -48,15 +47,82 @@ architecture behavioral of reservation_station is
   type entries_opcode_t is
     array(0 to num_entries-1) of unsigned(opcode_len-1 downto 0);
   type entries_tag_t is array(0 to num_entries-1) of tomasulo_tag_t;
-  type entries_value_t is array(0 to num_entries-1) of unsigned_word;
-  type entries_operand_t is array(0 to num_entries-1) of value_or_tag_t;
+  type entries_value_t is array(0 to num_entries-1)
+    of unsigned_word_array_t(0 to num_operands-1);
+  type entries_operand_t is array(0 to num_entries-1)
+    of value_or_tag_array_t(0 to num_operands-1);
 
   signal entries_busy :
     std_logic_vector(0 to num_entries-1) := (others => '0');
   signal entries_tag : entries_tag_t;
   signal entries_opcode : entries_opcode_t;
-  signal entries_operand0 : entries_operand_t;
-  signal entries_operand1 : entries_operand_t;
+  signal entries_operands : entries_operand_t;
+
+  function str_of_operands(ops:unsigned_word_array_t) return string is
+  begin
+    if ops'length = 0 then
+      return "";
+    elsif ops'length = 1 then
+      return "o0 = " & hex_of_word(ops(0));
+    elsif ops'length = 2 then
+      return "o0 = " & hex_of_word(ops(0)) & ", " &
+             "o1 = " & hex_of_word(ops(1));
+    elsif ops'length = 3 then
+      return "o0 = " & hex_of_word(ops(0)) & ", " &
+             "o1 = " & hex_of_word(ops(1)) & ", " &
+             "o2 = " & hex_of_word(ops(2));
+    elsif ops'length = 4 then
+      return "o0 = " & hex_of_word(ops(0)) & ", " &
+             "o1 = " & hex_of_word(ops(1)) & ", " &
+             "o2 = " & hex_of_word(ops(2)) & ", " &
+             "o3 = " & hex_of_word(ops(3));
+    elsif ops'length = 5 then
+      return "o0 = " & hex_of_word(ops(0)) & ", " &
+             "o1 = " & hex_of_word(ops(1)) & ", " &
+             "o2 = " & hex_of_word(ops(2)) & ", " &
+             "o3 = " & hex_of_word(ops(3)) & ", " &
+             "o4 = " & hex_of_word(ops(4));
+    else
+      return "o0 = " & hex_of_word(ops(0)) & ", " &
+             "o1 = " & hex_of_word(ops(1)) & ", " &
+             "o2 = " & hex_of_word(ops(2)) & ", " &
+             "o3 = " & hex_of_word(ops(3)) & ", " &
+             "o4 = " & hex_of_word(ops(4)) & "...";
+    end if;
+  end function str_of_operands;
+
+  function str_of_operands(ops:value_or_tag_array_t) return string is
+  begin
+    if ops'length = 0 then
+      return "";
+    elsif ops'length = 1 then
+      return "o0 = " & str_of_value_or_tag(ops(0));
+    elsif ops'length = 2 then
+      return "o0 = " & str_of_value_or_tag(ops(0)) & ", " &
+             "o1 = " & str_of_value_or_tag(ops(1));
+    elsif ops'length = 3 then
+      return "o0 = " & str_of_value_or_tag(ops(0)) & ", " &
+             "o1 = " & str_of_value_or_tag(ops(1)) & ", " &
+             "o2 = " & str_of_value_or_tag(ops(2));
+    elsif ops'length = 4 then
+      return "o0 = " & str_of_value_or_tag(ops(0)) & ", " &
+             "o1 = " & str_of_value_or_tag(ops(1)) & ", " &
+             "o2 = " & str_of_value_or_tag(ops(2)) & ", " &
+             "o3 = " & str_of_value_or_tag(ops(3));
+    elsif ops'length = 5 then
+      return "o0 = " & str_of_value_or_tag(ops(0)) & ", " &
+             "o1 = " & str_of_value_or_tag(ops(1)) & ", " &
+             "o2 = " & str_of_value_or_tag(ops(2)) & ", " &
+             "o3 = " & str_of_value_or_tag(ops(3)) & ", " &
+             "o4 = " & str_of_value_or_tag(ops(4));
+    else
+      return "o0 = " & str_of_value_or_tag(ops(0)) & ", " &
+             "o1 = " & str_of_value_or_tag(ops(1)) & ", " &
+             "o2 = " & str_of_value_or_tag(ops(2)) & ", " &
+             "o3 = " & str_of_value_or_tag(ops(3)) & ", " &
+             "o4 = " & str_of_value_or_tag(ops(4)) & "...";
+    end if;
+  end function str_of_operands;
 begin
   broadcast_available <= broadcast_available_queue(latency-1);
   broadcast_tag <= broadcast_tag_queue(latency-1);
@@ -70,11 +136,9 @@ begin
     variable entries_issuable_any : std_logic;
     variable entries_issue_tag : entries_tag_t;
     variable entries_issue_opcode : entries_opcode_t;
-    variable entries_issue_operand0 : entries_value_t;
-    variable entries_issue_operand1 : entries_value_t;
+    variable entries_issue_operands : entries_value_t;
 
-    variable next_entries_operand0 : entries_operand_t;
-    variable next_entries_operand1 : entries_operand_t;
+    variable next_entries_operands : entries_operand_t;
 
     subtype entry_select_t is integer range 0 to num_entries;
     variable next_dispatchable : std_logic;
@@ -84,17 +148,14 @@ begin
     if rst = '1' then
       issue <= '0';
       issue_opcode <= (others => '-');
-      issue_operand0 <= (others => '-');
-      issue_operand1 <= (others => '-');
+      issue_operands <= (others => (others => '-'));
       broadcast_available_queue <= (others => '0');
       broadcast_tag_queue <= (others => (others => '-'));
       entries_busy <= (others => '0');
       entries_tag <= (others => (others => '-'));
       entries_opcode <= (others => (others => '-'));
-      entries_operand0 <= (others =>
-        ('-', (others => '-'), (others => '-')));
-      entries_operand1 <= (others =>
-        ('-', (others => '-'), (others => '-')));
+      entries_operands <= (others => (others =>
+        ('-', (others => '-'), (others => '-'))));
     elsif rising_edge(clk) then
       -- assertions
       assert TO_X01(dispatch) /= 'X'
@@ -107,16 +168,14 @@ begin
                  "metavalue detected in entries_busy(" & integer'image(i) & ")"
             severity failure;
         if entries_busy(i) = '1' then
-          assert TO_X01(entries_operand0(i).available) /= 'X'
-            report "RnSn for " & unit_name & ": " &
-                   "metavalue detected in " &
-                   "entries_operand0(" & integer'image(i) & ").available"
-              severity failure;
-          assert TO_X01(entries_operand1(i).available) /= 'X'
-            report "RnSn for " & unit_name & ": " &
-                   "metavalue detected in " &
-                   "entries_operand1(" & integer'image(i) & ").available"
-              severity failure;
+          for opid in 0 to num_operands-1 loop
+            assert TO_X01(entries_operands(i)(opid).available) /= 'X'
+              report "RnSn for " & unit_name & ": " &
+                     "metavalue detected in " &
+                     "entries_operands(" & integer'image(i) & ")(" &
+                     integer'image(opid) & ").available"
+                severity failure;
+          end loop;
         end if;
       end loop;
       assert entries_busy(num_entries-1) = '0' or dispatch = '0'
@@ -132,10 +191,11 @@ begin
 
       -- processing for issuing
       for i in 0 to num_entries-1 loop
-        entries_issuable(i) :=
-          entries_busy(i) and
-          entries_operand0(i).available and
-          entries_operand1(i).available;
+        entries_issuable(i) := entries_busy(i);
+        for opid in 0 to num_operands-1 loop
+          entries_issuable(i) :=
+            entries_issuable(i) and entries_operands(i)(opid).available;
+        end loop;
         if i = 0 then
           entries_issuable_accum(i) := entries_issuable(i);
         else
@@ -148,29 +208,30 @@ begin
         if i = num_entries-1 or entries_issuable(i) = '1' then
           entries_issue_tag(i) := entries_tag(i);
           entries_issue_opcode(i) := entries_opcode(i);
-          entries_issue_operand0(i) := entries_operand0(i).value;
-          entries_issue_operand1(i) := entries_operand1(i).value;
+          for opid in 0 to num_operands-1 loop
+            entries_issue_operands(i)(opid) := entries_operands(i)(opid).value;
+          end loop;
         else
           entries_issue_tag(i) := entries_tag(i+1);
           entries_issue_opcode(i) := entries_opcode(i+1);
-          entries_issue_operand0(i) := entries_operand0(i+1).value;
-          entries_issue_operand1(i) := entries_operand1(i+1).value;
+          for opid in 0 to num_operands-1 loop
+            entries_issue_operands(i)(opid) :=
+              entries_operands(i+1)(opid).value;
+          end loop;
         end if;
       end loop;
 
       if refetch = '1' then
         issue <= '0';
         issue_opcode <= (others => '-');
-        issue_operand0 <= (others => '-');
-        issue_operand1 <= (others => '-');
+        issue_operands <= (others => (others => '-'));
         broadcast_available_queue(0) <= '0';
         broadcast_tag_queue(0) <= (others => '-');
       else
         -- issue
         issue <= entries_issuable_any;
         issue_opcode <= entries_issue_opcode(0);
-        issue_operand0 <= entries_issue_operand0(0);
-        issue_operand1 <= entries_issue_operand1(0);
+        issue_operands <= entries_issue_operands(0);
         broadcast_available_queue(0) <= entries_issuable_any;
         broadcast_tag_queue(0) <= entries_issue_tag(0);
         if entries_issuable_any = '1' then
@@ -181,29 +242,22 @@ begin
                        opcode_len) & ", " &
                      "tag = " &
                      integer'image(to_integer(entries_issue_tag(0))) & ", " &
-                     "o0 = " & hex_of_word(entries_issue_operand0(0)) & ", " &
-                     "o1 = " & hex_of_word(entries_issue_operand1(0)) & ")"
+                     str_of_operands(entries_issue_operands(0)) & ")"
               severity note;
         end if;
       end if;
 
       -- snoop for CDB
       for i in 0 to num_entries-1 loop
-        next_entries_operand0(i) :=
-          snoop(entries_operand0(i),
-                cdb_in_available, cdb_in_value, cdb_in_tag,
-                debug_out,
-                "RnSn for " & unit_name & ": " &
-                "entry tag " & dec_of_unsigned(entries_tag(i)) &
-                ": operand0");
-
-        next_entries_operand1(i) :=
-          snoop(entries_operand1(i),
-                cdb_in_available, cdb_in_value, cdb_in_tag,
-                debug_out,
-                "RnSn for " & unit_name & ": " &
-                "entry tag " & dec_of_unsigned(entries_tag(i)) &
-                ": operand1");
+        for opid in 0 to num_operands-1 loop
+          next_entries_operands(i)(opid) :=
+            snoop(entries_operands(i)(opid),
+                  cdb_in_available, cdb_in_value, cdb_in_tag,
+                  debug_out,
+                  "RnSn for " & unit_name & ": " &
+                  "entry tag " & dec_of_unsigned(entries_tag(i)) &
+                  ": operand" & integer'image(opid));
+        end loop;
       end loop;
 
       if refetch = '1' then
@@ -211,8 +265,8 @@ begin
           entries_busy(i) <= '0';
           entries_tag(i) <= (others => '-');
           entries_opcode(i) <= (others => '-');
-          entries_operand0(i) <= ('-', (others => '-'), (others => '-'));
-          entries_operand1(i) <= ('-', (others => '-'), (others => '-'));
+          entries_operands(i) <= (others =>
+            ('-', (others => '-'), (others => '-')));
         end loop;
 
         for i in 0 to latency-2 loop
@@ -233,14 +287,13 @@ begin
               report "RnSn for " & unit_name & ": " &
                      "metavalue detected in dispatch_tag"
                 severity failure;
-            assert TO_X01(dispatch_operand0.available) /= 'X'
-              report "RnSn for " & unit_name & ": " &
-                     "metavalue detected in dispatch_operand0.available"
-                severity failure;
-            assert TO_X01(dispatch_operand1.available) /= 'X'
-              report "RnSn for " & unit_name & ": " &
-                     "metavalue detected in dispatch_operand1.available"
-                severity failure;
+            for opid in 0 to num_operands-1 loop
+              assert TO_X01(dispatch_operands(opid).available) /= 'X'
+                report "RnSn for " & unit_name & ": " &
+                       "metavalue detected in dispatch_operands(" &
+                       integer'image(opid) & ").available"
+                  severity failure;
+            end loop;
             assert not debug_out
               report "RnSn for " & unit_name & ": " &
                      "dispatch (opcode = " &
@@ -248,38 +301,30 @@ begin
                          ", " &
                        "tag = " &
                        dec_of_unsigned(dispatch_tag) & ", " &
-                       "o0 = " &
-                         str_of_value_or_tag(dispatch_operand0) & ", " &
-                       "o1 = " &
-                         str_of_value_or_tag(dispatch_operand1) & ")"
+                       str_of_operands(dispatch_operands) & ")"
                 severity note;
             entries_busy(i) <= '1';
             entries_tag(i) <= dispatch_tag;
             entries_opcode(i) <= dispatch_opcode;
-            entries_operand0(i) <= dispatch_operand0;
-            entries_operand1(i) <= dispatch_operand1;
+            entries_operands(i) <= dispatch_operands;
           elsif entries_issuable_accum(i) = '1' then
             if i = num_entries-1 then
               entries_busy(i) <= '0';
               entries_tag(i) <= (others => '-');
               entries_opcode(i) <= (others => '-');
-              entries_operand0(i) <=
-                ('-', (others => '-'), (others => '-'));
-              entries_operand1(i) <=
-                ('-', (others => '-'), (others => '-'));
+              entries_operands(i) <= (others =>
+                ('-', (others => '-'), (others => '-')));
             else
               entries_busy(i) <= entries_busy(i+1);
               entries_tag(i) <= entries_tag(i+1);
               entries_opcode(i) <= entries_opcode(i+1);
-              entries_operand0(i) <= next_entries_operand0(i+1);
-              entries_operand1(i) <= next_entries_operand1(i+1);
+              entries_operands(i) <= next_entries_operands(i+1);
             end if;
           else
             entries_busy(i) <= entries_busy(i);
             entries_tag(i) <= entries_tag(i);
             entries_opcode(i) <= entries_opcode(i);
-            entries_operand0(i) <= next_entries_operand0(i);
-            entries_operand1(i) <= next_entries_operand1(i);
+            entries_operands(i) <= next_entries_operands(i);
           end if;
         end loop;
 
