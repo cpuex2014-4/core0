@@ -19,6 +19,12 @@ package kakeudon is
 
   type rob_type_t is (rob_type_branch, rob_type_store, rob_type_calc);
 
+  type value_or_tag_t is record
+    available : std_logic;
+    value : unsigned(31 downto 0);
+    tag : tomasulo_tag_t;
+  end record;
+
   attribute ram_style : string;
 
   component reservation_station is
@@ -35,12 +41,8 @@ package kakeudon is
       cdb_in_value : in cdb_in_value_t;
       cdb_in_tag : in cdb_in_tag_t;
       dispatch_opcode : in unsigned(opcode_len-1 downto 0);
-      dispatch_operand0_available : in std_logic;
-      dispatch_operand0_value : in unsigned_word;
-      dispatch_operand0_tag : in tomasulo_tag_t;
-      dispatch_operand1_available : in std_logic;
-      dispatch_operand1_value : in unsigned_word;
-      dispatch_operand1_tag : in tomasulo_tag_t;
+      dispatch_operand0 : in value_or_tag_t;
+      dispatch_operand1 : in value_or_tag_t;
       dispatch : in std_logic;
       dispatch_tag : in tomasulo_tag_t;
       dispatchable : out std_logic := '1';
@@ -158,13 +160,9 @@ package kakeudon is
       cdb_in_value : in cdb_in_value_t;
       cdb_in_tag : in cdb_in_tag_t;
       rd0_addr : in internal_register_t;
-      rd0_available : out std_logic;
-      rd0_value : out unsigned_word;
-      rd0_tag : out tomasulo_tag_t;
+      rd0 : out value_or_tag_t;
       rd1_addr : in internal_register_t;
-      rd1_available : out std_logic;
-      rd1_value : out unsigned_word;
-      rd1_tag : out tomasulo_tag_t;
+      rd1 : out value_or_tag_t;
       wr0_addr : in internal_register_t;
       wr0_enable : in std_logic;
       wr0_tag : in tomasulo_tag_t;
@@ -172,19 +170,6 @@ package kakeudon is
       wr1_enable : in std_logic;
       wr1_value : in unsigned_word);
   end component register_file;
-
-  component fp_register_file is
-    port (
-      clk : in std_logic;
-      rst : in std_logic;
-      fpr_rd0addr : in unsigned(4 downto 0);
-      fpr_rd0val : out unsigned_word;
-      fpr_rd1addr : in unsigned(4 downto 0);
-      fpr_rd1val : out unsigned_word;
-      fpr_wraddr : in unsigned(4 downto 0);
-      fpr_wrval : in unsigned_word;
-      fpr_we : in std_logic);
-  end component fp_register_file;
 
   component memory_controller is
     port (
@@ -307,12 +292,26 @@ package kakeudon is
   constant ALU_OP_SRL  : alu_opcode_t := 2#1110#;
   constant ALU_OP_SRA  : alu_opcode_t := 2#1111#;
 
+  function value_or_tag_from_value(value:unsigned_word) return value_or_tag_t;
+  function value_or_tag_select(sel:std_logic;
+    vt0:value_or_tag_t; vt1:value_or_tag_t) return value_or_tag_t;
+  function value_or_tag_merge(vt:value_or_tag_t;
+    ready:std_logic; value:unsigned_word) return value_or_tag_t;
+  function snoop(vt:value_or_tag_t;
+    cdb_in_available:std_logic_vector(0 to cdb_size-1);
+    cdb_in_value:cdb_in_value_t;
+    cdb_in_tag:cdb_in_tag_t;
+    debug_out:boolean;
+    debug_prefix:string) return value_or_tag_t;
+
   function name_of_internal_register(r:internal_register_t) return string;
   function str_of_value_or_tag(available:std_logic;
     value:unsigned_word; tag:tomasulo_tag_t) return string;
+  function str_of_value_or_tag(vt:value_or_tag_t) return string;
 
   function bin_of_int(i:natural; l:natural) return string;
   function hex_of_word(u:unsigned(31 downto 0)) return string;
+  function dec_of_unsigned(u:unsigned) return string;
   function str_of_float(f:unsigned(31 downto 0)) return string;
 
   type instruction_rom_t is
@@ -358,6 +357,71 @@ package kakeudon is
 end package kakeudon;
 
 package body kakeudon is
+  function value_or_tag_from_value(value:unsigned_word)
+    return value_or_tag_t is
+  begin
+    return ('1', value, (others => 'X'));
+  end function value_or_tag_from_value;
+  function value_or_tag_select(sel:std_logic;
+    vt0:value_or_tag_t; vt1:value_or_tag_t) return value_or_tag_t is
+  begin
+    if TO_X01(sel) = 'X' then
+      return ('X', (others => 'X'), (others => 'X'));
+    elsif sel = '1' then
+      return vt0;
+    else
+      return vt1;
+    end if;
+  end function value_or_tag_select;
+  function value_or_tag_merge(vt:value_or_tag_t;
+  ready:std_logic; value:unsigned_word) return value_or_tag_t is
+  begin
+    if TO_X01(vt.available) = 'X' then
+      return ('X', (others => 'X'), (others => 'X'));
+    elsif vt.available = '1' then
+      return vt;
+    elsif TO_X01(ready) = 'X' then
+      return ('X', (others => 'X'), (others => 'X'));
+    elsif ready = '1' then
+      return ('1', value, (others => '-'));
+    else
+      return vt;
+    end if;
+  end function value_or_tag_merge;
+  function snoop(vt:value_or_tag_t;
+      cdb_in_available:std_logic_vector(0 to cdb_size-1);
+      cdb_in_value:cdb_in_value_t;
+      cdb_in_tag:cdb_in_tag_t;
+      debug_out:boolean;
+      debug_prefix:string) return value_or_tag_t is
+    variable cdb_source : cdb_extended_id_t;
+  begin
+    if TO_X01(vt.available) = 'X' then
+      return ('X', (others => 'X'), (others => 'X'));
+    end if;
+    cdb_source := cdb_size;
+    if vt.available = '0' then
+      for j in 0 to cdb_size-1 loop
+        if cdb_in_available(j) = '1' and
+            cdb_in_tag(j) = vt.tag then
+          assert not debug_out
+            report debug_prefix &
+                   ": found from CDB(" &
+                   integer'image(j) &
+                   ") (tag " &
+                   integer'image(to_integer(vt.tag)) & ")"
+              severity note;
+          cdb_source := j;
+        end if;
+      end loop;
+    end if;
+    if cdb_source = cdb_size then
+      return vt;
+    else
+      return ('1', cdb_in_value(cdb_source), vt.tag);
+    end if;
+  end function snoop;
+
   function name_of_internal_register(r:internal_register_t) return string is
     type gpr_name_t is array(0 to 31) of string(1 to 3);
     constant gpr_name : gpr_name_t := (
@@ -395,6 +459,21 @@ package body kakeudon is
     end if;
   end function str_of_value_or_tag;
 
+  function str_of_value_or_tag(vt:value_or_tag_t) return string is
+  begin
+    if TO_X01(vt.available) = 'X' then
+      return "UNKNOWN_AVAILABLE_BIT";
+    elsif vt.available = '1' then
+      return hex_of_word(vt.value);
+    else
+      if TO_01(vt.tag, 'X')(0) = 'X' then
+        return "tag(X)";
+      else
+        return "tag(" & integer'image(to_integer(vt.tag)) & ")";
+      end if;
+    end if;
+  end function str_of_value_or_tag;
+
   function bin_of_int(i:natural; l:natural) return string is
   begin
     if l <= 0 then
@@ -423,6 +502,15 @@ package body kakeudon is
         hex_table(to_integer(u( 3 downto  0)));
     end if;
   end function hex_of_word;
+
+  function dec_of_unsigned(u:unsigned) return string is
+  begin
+    if TO_01(u,'X')(0)='X' then
+      return "X";
+    else
+      return integer'image(to_integer(u));
+    end if;
+  end function dec_of_unsigned;
 
   function str_of_float(f:unsigned(31 downto 0)) return string is
     variable f_exp : integer;

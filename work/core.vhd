@@ -82,18 +82,10 @@ architecture behavioral of core is
   signal decode_stall : std_logic := '0';
 
   -- dispatch
-  signal dispatch_operand0_available_reg : std_logic;
-  signal dispatch_operand0_value_reg : unsigned_word;
-  signal dispatch_operand0_tag_reg : tomasulo_tag_t;
-  signal dispatch_operand0_available : std_logic;
-  signal dispatch_operand0_value : unsigned_word;
-  signal dispatch_operand0_tag : tomasulo_tag_t;
-  signal dispatch_operand1_available_reg : std_logic;
-  signal dispatch_operand1_value_reg : unsigned_word;
-  signal dispatch_operand1_tag_reg : tomasulo_tag_t;
-  signal dispatch_operand1_available : std_logic;
-  signal dispatch_operand1_value : unsigned_word;
-  signal dispatch_operand1_tag : tomasulo_tag_t;
+  signal dispatch_operand0_reg : value_or_tag_t;
+  signal dispatch_operand0 : value_or_tag_t;
+  signal dispatch_operand1_reg : value_or_tag_t;
+  signal dispatch_operand1 : value_or_tag_t;
   signal dispatch_operand2 : unsigned_word;
   signal wr0_enable : std_logic;
 
@@ -475,86 +467,30 @@ begin
     refetch => refetch,
     refetch_address => refetch_address,
     rob_bottom => rob_bottom,
-    rob_rd0_tag => dispatch_operand0_tag_reg,
+    rob_rd0_tag => dispatch_operand0_reg.tag,
     rob_rd0_ready => dispatch_operand0_rob_ready,
     rob_rd0_value => dispatch_operand0_rob_value,
-    rob_rd1_tag => dispatch_operand1_tag_reg,
+    rob_rd1_tag => dispatch_operand1_reg.tag,
     rob_rd1_ready => dispatch_operand1_rob_ready,
     rob_rd1_value => dispatch_operand1_rob_value,
     commit => any_commit);
 
-  update_dispatch_operand0_available :
-  process(operand0_use_immediate, dispatch_operand0_available_reg,
-    dispatch_operand0_value_reg, dispatch_operand0_tag_reg,
-    operand0_immediate_val, dispatch_operand0_rob_ready,
-    dispatch_operand0_rob_value)
-  begin
-    if TO_X01(operand0_use_immediate) = 'X' then
-      dispatch_operand0_available <= 'X';
-      dispatch_operand0_value <= (others => 'X');
-      dispatch_operand0_tag <= (others => 'X');
-    elsif operand0_use_immediate = '1' then
-      dispatch_operand0_available <= '1';
-      dispatch_operand0_value <= operand0_immediate_val;
-      dispatch_operand0_tag <= (others => '-');
-    elsif TO_X01(dispatch_operand0_available_reg) = 'X' then
-      dispatch_operand0_available <= 'X';
-      dispatch_operand0_value <= (others => 'X');
-      dispatch_operand0_tag <= (others => 'X');
-    elsif dispatch_operand0_available_reg = '1' then
-      dispatch_operand0_available <= dispatch_operand0_available_reg;
-      dispatch_operand0_value <= dispatch_operand0_value_reg;
-      dispatch_operand0_tag <= dispatch_operand0_tag_reg;
-    elsif TO_X01(dispatch_operand0_rob_ready) = 'X' then
-      dispatch_operand0_available <= 'X';
-      dispatch_operand0_value <= (others => 'X');
-      dispatch_operand0_tag <= (others => 'X');
-    elsif dispatch_operand0_rob_ready = '1' then
-      dispatch_operand0_available <= '1';
-      dispatch_operand0_value <= dispatch_operand0_rob_value;
-      dispatch_operand0_tag <= (others => '-');
-    else
-      dispatch_operand0_available <= dispatch_operand0_available_reg;
-      dispatch_operand0_value <= dispatch_operand0_value_reg;
-      dispatch_operand0_tag <= dispatch_operand0_tag_reg;
-    end if;
-  end process update_dispatch_operand0_available;
-  update_dispatch_operand1_available :
-  process(operand1_use_immediate, dispatch_operand1_available_reg,
-    dispatch_operand1_value_reg, dispatch_operand1_tag_reg,
-    operand1_immediate_val, dispatch_operand1_rob_ready,
-    dispatch_operand1_rob_value)
-  begin
-    if TO_X01(operand1_use_immediate) = 'X' then
-      dispatch_operand1_available <= 'X';
-      dispatch_operand1_value <= (others => 'X');
-      dispatch_operand1_tag <= (others => 'X');
-    elsif operand1_use_immediate = '1' then
-      dispatch_operand1_available <= '1';
-      dispatch_operand1_value <= operand1_immediate_val;
-      dispatch_operand1_tag <= (others => '-');
-    elsif TO_X01(dispatch_operand1_available_reg) = 'X' then
-      dispatch_operand1_available <= 'X';
-      dispatch_operand1_value <= (others => 'X');
-      dispatch_operand1_tag <= (others => 'X');
-    elsif dispatch_operand1_available_reg = '1' then
-      dispatch_operand1_available <= dispatch_operand1_available_reg;
-      dispatch_operand1_value <= dispatch_operand1_value_reg;
-      dispatch_operand1_tag <= dispatch_operand1_tag_reg;
-    elsif TO_X01(dispatch_operand1_rob_ready) = 'X' then
-      dispatch_operand1_available <= 'X';
-      dispatch_operand1_value <= (others => 'X');
-      dispatch_operand1_tag <= (others => 'X');
-    elsif dispatch_operand1_rob_ready = '1' then
-      dispatch_operand1_available <= '1';
-      dispatch_operand1_value <= dispatch_operand1_rob_value;
-      dispatch_operand1_tag <= (others => '-');
-    else
-      dispatch_operand1_available <= dispatch_operand1_available_reg;
-      dispatch_operand1_value <= dispatch_operand1_value_reg;
-      dispatch_operand1_tag <= dispatch_operand1_tag_reg;
-    end if;
-  end process update_dispatch_operand1_available;
+  dispatch_operand0 <=
+    value_or_tag_merge(
+      value_or_tag_select(
+        operand0_use_immediate,
+        value_or_tag_from_value(operand0_immediate_val),
+        dispatch_operand0_reg),
+      dispatch_operand0_rob_ready,
+      dispatch_operand0_rob_value);
+  dispatch_operand1 <=
+    value_or_tag_merge(
+      value_or_tag_select(
+        operand1_use_immediate,
+        value_or_tag_from_value(operand1_immediate_val),
+        dispatch_operand1_reg),
+      dispatch_operand1_rob_ready,
+      dispatch_operand1_rob_value);
 
   dispatch_operand2 <= operand2_immediate_val;
 
@@ -588,13 +524,9 @@ begin
     cdb_in_value => cdb_value,
     cdb_in_tag => cdb_tag,
     rd0_addr => operand0_addr,
-    rd0_available => dispatch_operand0_available_reg,
-    rd0_value => dispatch_operand0_value_reg,
-    rd0_tag => dispatch_operand0_tag_reg,
+    rd0 => dispatch_operand0_reg,
     rd1_addr => operand1_addr,
-    rd1_available => dispatch_operand1_available_reg,
-    rd1_value => dispatch_operand1_value_reg,
-    rd1_tag => dispatch_operand1_tag_reg,
+    rd1 => dispatch_operand1_reg,
     wr0_addr => destination_addr,
     wr0_enable => wr0_enable,
     wr0_tag => rob_bottom,
@@ -618,12 +550,12 @@ begin
     cdb_in_value => cdb_value,
     cdb_in_tag => cdb_tag,
     dispatch_isstore => unit_operation(0),
-    dispatch_operand0_available => dispatch_operand0_available,
-    dispatch_operand0_value => dispatch_operand0_value,
-    dispatch_operand0_tag => dispatch_operand0_tag,
-    dispatch_operand1_available => dispatch_operand1_available,
-    dispatch_operand1_value => dispatch_operand1_value,
-    dispatch_operand1_tag => dispatch_operand1_tag,
+    dispatch_operand0_available => dispatch_operand0.available,
+    dispatch_operand0_value => dispatch_operand0.value,
+    dispatch_operand0_tag => dispatch_operand0.tag,
+    dispatch_operand1_available => dispatch_operand1.available,
+    dispatch_operand1_value => dispatch_operand1.value,
+    dispatch_operand1_tag => dispatch_operand1.tag,
     dispatch_operand2 => dispatch_operand2,
     dispatch => mem_dispatch,
     dispatch_tag => rob_bottom,
@@ -651,12 +583,8 @@ begin
     cdb_in_value => cdb_value,
     cdb_in_tag => cdb_tag,
     dispatch_opcode => unit_operation,
-    dispatch_operand0_available => dispatch_operand0_available,
-    dispatch_operand0_value => dispatch_operand0_value,
-    dispatch_operand0_tag => dispatch_operand0_tag,
-    dispatch_operand1_available => dispatch_operand1_available,
-    dispatch_operand1_value => dispatch_operand1_value,
-    dispatch_operand1_tag => dispatch_operand1_tag,
+    dispatch_operand0 => dispatch_operand0,
+    dispatch_operand1 => dispatch_operand1,
     dispatch => alu_dispatch,
     dispatch_tag => rob_bottom,
     dispatchable => alu_dispatchable,
