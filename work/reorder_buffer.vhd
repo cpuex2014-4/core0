@@ -93,9 +93,6 @@ begin
     rob_entries_val(to_integer(rob_rd1_tag));
 
   sequential : process(clk, rst)
-    type cdb_extended_id_array_t is
-      array(0 to num_entries-1) of cdb_extended_id_t;
-    variable branch_source : cdb_extended_id_array_t;
   begin
     if rst = '1' then
       rob_entries_busy <= (others => '0');

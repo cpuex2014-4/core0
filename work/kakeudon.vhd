@@ -96,12 +96,7 @@ package kakeudon is
       cdb_in_value : in cdb_in_value_t;
       cdb_in_tag : in cdb_in_tag_t;
       dispatch_isstore : in std_logic;
-      dispatch_operand0_available : in std_logic;
-      dispatch_operand0_value : in unsigned_word;
-      dispatch_operand0_tag : in tomasulo_tag_t;
-      dispatch_operand1_available : in std_logic;
-      dispatch_operand1_value : in unsigned_word;
-      dispatch_operand1_tag : in tomasulo_tag_t;
+      dispatch_operand0 : in value_or_tag_t;
       dispatch_operand2 : in unsigned_word;
       dispatch : in std_logic;
       dispatch_tag : in tomasulo_tag_t;
