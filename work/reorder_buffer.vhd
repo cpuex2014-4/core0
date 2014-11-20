@@ -17,21 +17,20 @@ entity reorder_buffer is
     dispatch : in std_logic;
     dispatch_type : in rob_type_t;
     dispatch_dest : in internal_register_t;
+    dispatch_rob_val : in value_or_tag_t;
     dispatch_branch : in value_or_tag_t;
     dispatch_predicted_branch : in unsigned(31 downto 0);
     rob_top_committable : out std_logic;
     rob_top_type : out rob_type_t;
     rob_top_dest : out internal_register_t;
-    rob_top_value : out unsigned(31 downto 0);
+    rob_top_val : out value_or_tag_t;
     refetch : out std_logic;
     refetch_address : out unsigned(31 downto 0);
     rob_bottom : out tomasulo_tag_t;
     rob_rd0_tag : in tomasulo_tag_t;
-    rob_rd0_ready : out std_logic;
-    rob_rd0_value : out unsigned(31 downto 0);
+    rob_rd0 : out value_or_tag_t;
     rob_rd1_tag : in tomasulo_tag_t;
-    rob_rd1_ready : out std_logic;
-    rob_rd1_value : out unsigned(31 downto 0);
+    rob_rd1 : out value_or_tag_t;
     commit : in std_logic);
 end entity reorder_buffer;
 
@@ -45,17 +44,18 @@ architecture behavioral of reorder_buffer is
   type rob_entries_type_t is array(0 to num_entries-1) of rob_type_t;
   type rob_entries_dest_t is array(0 to num_entries-1) of internal_register_t;
   type rob_entries_tag_t is array(0 to num_entries-1) of tomasulo_tag_t;
-  type rob_entries_val_t is array(0 to num_entries-1) of unsigned_word;
+  type rob_entries_word_t is array(0 to num_entries-1) of unsigned_word;
   type rob_entries_value_or_tag_t is
     array(0 to num_entries-1) of value_or_tag_t;
 
+  signal rob_entries_busy : std_logic_vector(0 to num_entries-1)
+    := (others => '0');
   signal rob_entries_type : rob_entries_type_t;
   signal rob_entries_dest : rob_entries_dest_t;
-  signal rob_entries_val : rob_entries_val_t;
-  signal rob_entries_ready : std_logic_vector(0 to num_entries-1);
+  signal rob_entries_val : rob_entries_value_or_tag_t;
 
   signal rob_entries_branch : rob_entries_value_or_tag_t;
-  signal rob_entries_predicted_branch : rob_entries_val_t;
+  signal rob_entries_predicted_branch : rob_entries_word_t;
 
   signal internal_rob_top_committable : std_logic;
   signal internal_refetch : std_logic;
@@ -63,13 +63,12 @@ begin
   rob_bottom <= rob_end;
   rob_top_committable <= internal_rob_top_committable;
   internal_rob_top_committable <=
-    rob_entries_ready(to_integer(rob_start)) and
-        rob_entries_branch(to_integer(rob_start)).available
-      when rob_start /= rob_end else
-    '0';
+    rob_entries_busy(to_integer(rob_start)) and
+    rob_entries_val(to_integer(rob_start)).available and
+    rob_entries_branch(to_integer(rob_start)).available;
   rob_top_type <= rob_entries_type(to_integer(rob_start));
   rob_top_dest <= rob_entries_dest(to_integer(rob_start));
-  rob_top_value <= rob_entries_val(to_integer(rob_start));
+  rob_top_val <= rob_entries_val(to_integer(rob_start));
   refetch <= internal_refetch;
   internal_refetch <=
     'X' when TO_X01(internal_rob_top_committable) = 'X' else
@@ -82,36 +81,24 @@ begin
       rob_entries_branch(to_integer(rob_start)).value /=
       rob_entries_predicted_branch(to_integer(rob_start)) else '0';
   refetch_address <= rob_entries_branch(to_integer(rob_start)).value;
-  dispatchable <= '1' when rob_start - rob_end /= 1 else '0';
+  dispatchable <= not rob_entries_busy(to_integer(rob_end));
 
-  update_rd0 : process(rob_rd0_tag, rob_entries_ready, rob_entries_val)
-  begin
-    if TO_01(rob_rd0_tag, 'X')(0) = 'X' then
-      rob_rd0_ready <= 'X';
-      rob_rd0_value <= (others => 'X');
-    else
-      rob_rd0_ready <= rob_entries_ready(to_integer(rob_rd0_tag));
-      rob_rd0_value <= rob_entries_val(to_integer(rob_rd0_tag));
-    end if;
-  end process update_rd0;
-  update_rd1 : process(rob_rd1_tag, rob_entries_ready, rob_entries_val)
-  begin
-    if TO_01(rob_rd1_tag, 'X')(0) = 'X' then
-      rob_rd1_ready <= 'X';
-      rob_rd1_value <= (others => 'X');
-    else
-      rob_rd1_ready <= rob_entries_ready(to_integer(rob_rd1_tag));
-      rob_rd1_value <= rob_entries_val(to_integer(rob_rd1_tag));
-    end if;
-  end process update_rd1;
+  rob_rd0 <=
+    ('X', (others => 'X'), (others => 'X'))
+      when TO_01(rob_rd0_tag, 'X')(0) = 'X' else
+    rob_entries_val(to_integer(rob_rd0_tag));
+  rob_rd1 <=
+    ('X', (others => 'X'), (others => 'X'))
+      when TO_01(rob_rd1_tag, 'X')(0) = 'X' else
+    rob_entries_val(to_integer(rob_rd1_tag));
 
   sequential : process(clk, rst)
     type cdb_extended_id_array_t is
       array(0 to num_entries-1) of cdb_extended_id_t;
-    variable result_source : cdb_extended_id_array_t;
     variable branch_source : cdb_extended_id_array_t;
   begin
     if rst = '1' then
+      rob_entries_busy <= (others => '0');
       rob_start <= (others => '0');
       rob_end <= (others => '0');
     elsif rising_edge(clk) then
@@ -127,10 +114,14 @@ begin
             severity failure;
 
         if dispatch = '1' then
+          rob_entries_busy(to_integer(rob_end)) <= '1';
           rob_entries_type(to_integer(rob_end)) <= dispatch_type;
           rob_entries_dest(to_integer(rob_end)) <= dispatch_dest;
-          rob_entries_ready(to_integer(rob_end)) <= '0';
-          rob_entries_val(to_integer(rob_end)) <= (others => '-');
+          assert TO_X01(dispatch_rob_val.available) /= 'X'
+            report "metavalue detected in dispatch_rob_val.available"
+              severity failure;
+          rob_entries_val(to_integer(rob_end)) <=
+            dispatch_rob_val;
 
           rob_entries_branch(to_integer(rob_end)) <= dispatch_branch;
           rob_entries_predicted_branch(to_integer(rob_end)) <=
@@ -143,37 +134,24 @@ begin
           assert not debug_out
             report "commit: tag(" & integer'image(to_integer(rob_start)) & ")"
               severity note;
+          rob_entries_busy(to_integer(rob_start)) <= '0';
           rob_start <= rob_start + 1;
         end if;
 
         -- snoop for CDB
         for i in 0 to num_entries-1 loop
-          result_source(i) := cdb_size;
-          if rob_entries_ready(i) = '0' then
-            for j in 0 to cdb_size-1 loop
-              if cdb_in_available(j) = '1' and
-                  cdb_in_tag(j) = i then
-                result_source(i) := j;
-              end if;
-            end loop;
-          end if;
-          if result_source(i) < cdb_size then
-            rob_entries_ready(i) <= '1';
-            rob_entries_val(i) <= cdb_in_value(result_source(i));
-          end if;
+          if rob_entries_busy(i) = '1' then
+            rob_entries_val(i) <=
+              snoop(rob_entries_val(i),
+                    cdb_in_available, cdb_in_value, cdb_in_tag,
+                    debug_out,
+                    "ROB(" & integer'image(i) & ").val: ");
 
-          branch_source(i) := cdb_size;
-          if rob_entries_branch(i).available = '0' then
-            for j in 0 to cdb_size-1 loop
-              if cdb_in_available(j) = '1' and
-                  cdb_in_tag(j) = rob_entries_branch(i).tag then
-                branch_source(i) := j;
-              end if;
-            end loop;
-          end if;
-          if branch_source(i) < cdb_size then
-            rob_entries_ready(i) <= '1';
-            rob_entries_val(i) <= cdb_in_value(branch_source(i));
+            rob_entries_branch(i) <=
+              snoop(rob_entries_branch(i),
+                    cdb_in_available, cdb_in_value, cdb_in_tag,
+                    debug_out,
+                    "ROB(" & integer'image(i) & ").branch: ");
           end if;
         end loop;
       end if;

@@ -68,21 +68,20 @@ package kakeudon is
       dispatch : in std_logic;
       dispatch_type : in rob_type_t;
       dispatch_dest : in internal_register_t;
+      dispatch_rob_val : in value_or_tag_t;
       dispatch_branch : in value_or_tag_t;
       dispatch_predicted_branch : in unsigned(31 downto 0);
       rob_top_committable : out std_logic;
       rob_top_type : out rob_type_t;
       rob_top_dest : out internal_register_t;
-      rob_top_value : out unsigned(31 downto 0);
+      rob_top_val : out value_or_tag_t;
       refetch : out std_logic;
       refetch_address : out unsigned(31 downto 0);
       rob_bottom : out tomasulo_tag_t;
       rob_rd0_tag : in tomasulo_tag_t;
-      rob_rd0_ready : out std_logic;
-      rob_rd0_value : out unsigned(31 downto 0);
+      rob_rd0 : out value_or_tag_t;
       rob_rd1_tag : in tomasulo_tag_t;
-      rob_rd1_ready : out std_logic;
-      rob_rd1_value : out unsigned(31 downto 0);
+      rob_rd1 : out value_or_tag_t;
       commit : in std_logic);
   end component reorder_buffer;
 

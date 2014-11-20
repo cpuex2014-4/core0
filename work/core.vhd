@@ -74,6 +74,7 @@ architecture behavioral of core is
   signal operand3_immediate_val : unsigned(31 downto 0);
   signal destination_addr : internal_register_t;
   signal destination_enable : std_logic := '0';
+  signal decode_val_from_reg : std_logic;
   signal decode_branch_from_reg : std_logic;
   signal decode_branch_available : std_logic;
   signal decode_branch_value : unsigned(31 downto 0);
@@ -91,12 +92,13 @@ architecture behavioral of core is
   signal dispatch_operand3 : unsigned_word;
   signal dispatch_operands_2 : value_or_tag_array_t(0 to 1);
   signal dispatch_operands_4 : value_or_tag_array_t(0 to 3);
+  signal dispatch_rob_val : value_or_tag_t;
   signal dispatch_branch : value_or_tag_t;
   signal wr0_enable : std_logic;
 
   signal any_dispatch : std_logic;
 
-  signal mem_dispatchable : std_logic;
+  signal mem_dispatchable : std_logic := '0';
   signal mem_dispatch : std_logic := '0';
 
   signal alu_dispatchable : std_logic;
@@ -110,13 +112,11 @@ architecture behavioral of core is
   signal rob_top_committable : std_logic;
   signal rob_top_type : rob_type_t;
   signal rob_top_dest : internal_register_t;
-  signal rob_top_value : unsigned(31 downto 0);
+  signal rob_top_val : value_or_tag_t;
   signal rob_bottom : tomasulo_tag_t;
   signal rob_dispatchable : std_logic;
-  signal dispatch_operand0_rob_ready : std_logic;
-  signal dispatch_operand0_rob_value : unsigned(31 downto 0);
-  signal dispatch_operand1_rob_ready : std_logic;
-  signal dispatch_operand1_rob_value : unsigned(31 downto 0);
+  signal dispatch_operand0_rob : value_or_tag_t;
+  signal dispatch_operand1_rob : value_or_tag_t;
 
   -- commit
   signal calc_commit : std_logic;
@@ -224,6 +224,7 @@ begin
     variable next_operand3_immediate_val : unsigned(31 downto 0);
     variable next_destination_enable : std_logic;
     variable next_destination_addr : internal_register_t;
+    variable next_decode_val_from_reg : std_logic;
     variable next_decode_branch_from_reg : std_logic;
     variable next_decode_branch_available : std_logic;
     variable next_decode_branch_value : unsigned(31 downto 0);
@@ -243,6 +244,7 @@ begin
       operand3_immediate_val <= (others => '-');
       destination_enable <= '0';
       destination_addr <= (others => '-');
+      decode_val_from_reg <= '-';
       decode_branch_from_reg <= '-';
       decode_branch_available <= '-';
       decode_branch_value <= (others => '-');
@@ -263,6 +265,7 @@ begin
         operand3_immediate_val <= (others => '-');
         destination_enable <= '0';
         destination_addr <= (others => '-');
+        decode_val_from_reg <= '-';
         decode_branch_from_reg <= '-';
         decode_branch_available <= '-';
         decode_branch_value <= (others => '-');
@@ -282,6 +285,7 @@ begin
         next_operand3_immediate_val := (others => '-');
         next_destination_enable := '-';
         next_destination_addr := (others => '-');
+        next_decode_val_from_reg := '-';
         next_decode_branch_from_reg := '-';
         next_decode_branch_available := '-';
         next_decode_branch_value := (others => '-');
@@ -318,6 +322,7 @@ begin
             next_operand1_addr := d_rt;
             next_destination_enable := '1';
             next_destination_addr := d_rd;
+            next_decode_val_from_reg := '0';
             next_decode_branch_from_reg := '0';
             next_decode_branch_available := '1';
             next_decode_branch_value := program_counter_plus1 & "00";
@@ -334,6 +339,7 @@ begin
             next_operand1_immediate_val := (others => '-');
             next_destination_enable := '1';
             next_destination_addr := d_rd;
+            next_decode_val_from_reg := '0';
             next_decode_branch_from_reg := '0';
             next_decode_branch_available := '1';
             next_decode_branch_value := program_counter_plus1 & "00";
@@ -352,6 +358,7 @@ begin
           next_operand1_use_immediate := '1';
           next_operand1_immediate_val := program_counter_plus1 & "00";
           next_destination_enable := '0';
+          next_decode_val_from_reg := '0';
           next_decode_branch_from_reg := '0';
           next_decode_branch_available := '1';
           next_decode_branch_value :=
@@ -369,6 +376,7 @@ begin
           next_operand1_immediate_val := program_counter_plus1 & "00";
           next_destination_enable := '1';
           next_destination_addr := d_ra;
+          next_decode_val_from_reg := '0';
           next_decode_branch_from_reg := '0';
           next_decode_branch_available := '1';
           next_decode_branch_value :=
@@ -390,6 +398,7 @@ begin
             unsigned(signed(program_counter_plus1) + signed(d_short_imm))
             & "00";
           next_destination_enable := '0';
+          next_decode_val_from_reg := '0';
           next_decode_branch_from_reg := '0';
           next_decode_branch_available := '0';
           next_decoded_instruction_available := '1';
@@ -404,6 +413,7 @@ begin
           next_operand1_immediate_val := d_sign_ext_imm;
           next_destination_enable := '1';
           next_destination_addr := d_rt;
+          next_decode_val_from_reg := '0';
           next_decode_branch_from_reg := '0';
           next_decode_branch_available := '1';
           next_decode_branch_value := program_counter_plus1 & "00";
@@ -419,6 +429,7 @@ begin
           next_operand1_immediate_val := d_sign_ext_imm;
           next_destination_enable := '1';
           next_destination_addr := d_rt;
+          next_decode_val_from_reg := '0';
           next_decode_branch_from_reg := '0';
           next_decode_branch_available := '1';
           next_decode_branch_value := program_counter_plus1 & "00";
@@ -435,6 +446,7 @@ begin
           next_operand1_immediate_val := d_zero_ext_imm;
           next_destination_enable := '1';
           next_destination_addr := d_rt;
+          next_decode_val_from_reg := '0';
           next_decode_branch_from_reg := '0';
           next_decode_branch_available := '1';
           next_decode_branch_value := program_counter_plus1 & "00";
@@ -451,6 +463,7 @@ begin
           next_operand2_immediate_val := d_sign_ext_imm;
           next_destination_enable := '1';
           next_destination_addr := d_rt;
+          next_decode_val_from_reg := '0';
           next_decode_branch_from_reg := '0';
           next_decode_branch_available := '1';
           next_decode_branch_value := program_counter_plus1 & "00";
@@ -472,6 +485,7 @@ begin
         operand3_immediate_val <= next_operand3_immediate_val;
         destination_enable <= next_destination_enable;
         destination_addr <= next_destination_addr;
+        decode_val_from_reg <= next_decode_val_from_reg;
         decode_branch_from_reg <= next_decode_branch_from_reg;
         decode_branch_available <= next_decode_branch_available;
         decode_branch_value <= next_decode_branch_value;
@@ -491,6 +505,7 @@ begin
         operand3_immediate_val <= (others => '-');
         destination_enable <= '0';
         destination_addr <= (others => '-');
+        decode_val_from_reg <= '-';
         decode_branch_from_reg <= '-';
         decode_branch_available <= '-';
         decode_branch_value <= (others => '-');
@@ -502,6 +517,12 @@ begin
 
   decode_stall <=
     decoded_instruction_available and not any_dispatch;
+
+  dispatch_rob_val <=
+    value_or_tag_select(
+      decode_val_from_reg,
+      dispatch_operand1_reg,
+      ('0', (others => '-'), rob_bottom));
 
   dispatch_branch <=
     ('X', (others => 'X'), (others => 'X'))
@@ -522,21 +543,20 @@ begin
     dispatch => any_dispatch,
     dispatch_type => decode_rob_type,
     dispatch_dest => destination_addr,
+    dispatch_rob_val => dispatch_rob_val,
     dispatch_branch => dispatch_branch,
     dispatch_predicted_branch => decode_predicted_branch,
     rob_top_committable => rob_top_committable,
     rob_top_type => rob_top_type,
     rob_top_dest => rob_top_dest,
-    rob_top_value => rob_top_value,
+    rob_top_val => rob_top_val,
     refetch => refetch,
     refetch_address => refetch_address,
     rob_bottom => rob_bottom,
     rob_rd0_tag => dispatch_operand0_reg.tag,
-    rob_rd0_ready => dispatch_operand0_rob_ready,
-    rob_rd0_value => dispatch_operand0_rob_value,
+    rob_rd0 => dispatch_operand0_rob,
     rob_rd1_tag => dispatch_operand1_reg.tag,
-    rob_rd1_ready => dispatch_operand1_rob_ready,
-    rob_rd1_value => dispatch_operand1_rob_value,
+    rob_rd1 => dispatch_operand1_rob,
     commit => any_commit);
 
   dispatch_operand0 <=
@@ -545,16 +565,16 @@ begin
         operand0_use_immediate,
         value_or_tag_from_value(operand0_immediate_val),
         dispatch_operand0_reg),
-      dispatch_operand0_rob_ready,
-      dispatch_operand0_rob_value);
+      dispatch_operand0_rob.available,
+      dispatch_operand0_rob.value);
   dispatch_operand1 <=
     value_or_tag_merge(
       value_or_tag_select(
         operand1_use_immediate,
         value_or_tag_from_value(operand1_immediate_val),
         dispatch_operand1_reg),
-      dispatch_operand1_rob_ready,
-      dispatch_operand1_rob_value);
+      dispatch_operand1_rob.available,
+      dispatch_operand1_rob.value);
 
   dispatch_operand2 <= operand2_immediate_val;
 
@@ -606,7 +626,7 @@ begin
     wr0_tag => rob_bottom,
     wr1_addr => rob_top_dest,
     wr1_enable => rob_top_committable,
-    wr1_value => rob_top_value);
+    wr1_value => rob_top_val.value);
 
   mem_dispatch <=
     mem_dispatchable when
