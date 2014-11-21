@@ -72,6 +72,7 @@ package kakeudon is
       dispatch_branch : in value_or_tag_t;
       dispatch_predicted_branch : in unsigned(31 downto 0);
       rob_top_committable : out std_logic;
+      rob_top : out tomasulo_tag_t;
       rob_top_type : out rob_type_t;
       rob_top_dest : out internal_register_t;
       rob_top_val : out value_or_tag_t;
@@ -87,7 +88,8 @@ package kakeudon is
 
   component load_store_buffer is
     generic (
-      num_stage1_entries : natural);
+      num_stage1_entries : natural;
+      num_stage2_entries : natural);
     port (
       clk : in std_logic;
       rst : in std_logic;
@@ -100,7 +102,14 @@ package kakeudon is
       dispatch_operand2 : in unsigned_word;
       dispatch : in std_logic;
       dispatch_tag : in tomasulo_tag_t;
-      dispatchable : out std_logic := '1');
+      dispatchable : out std_logic := '1';
+      rob_top_committable : in std_logic;
+      rob_top : in tomasulo_tag_t;
+      ls_committable : out std_logic;
+      issue : out std_logic := '0';
+      issue_tag : out tomasulo_tag_t;
+      issue_isstore : out std_logic;
+      issue_operand0 : out unsigned_word);
   end component load_store_buffer;
 
   component core is

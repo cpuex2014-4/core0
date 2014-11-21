@@ -110,6 +110,7 @@ architecture behavioral of core is
 
   -- reorder buffer
   signal rob_top_committable : std_logic;
+  signal rob_top : tomasulo_tag_t;
   signal rob_top_type : rob_type_t;
   signal rob_top_dest : internal_register_t;
   signal rob_top_val : value_or_tag_t;
@@ -547,6 +548,7 @@ begin
     dispatch_branch => dispatch_branch,
     dispatch_predicted_branch => decode_predicted_branch,
     rob_top_committable => rob_top_committable,
+    rob_top => rob_top,
     rob_top_type => rob_top_type,
     rob_top_dest => rob_top_dest,
     rob_top_val => rob_top_val,
@@ -635,7 +637,8 @@ begin
 
   ls_buffer_unit : load_store_buffer
   generic map (
-    num_stage1_entries => 2)
+    num_stage1_entries => 2,
+    num_stage2_entries => 2)
   port map (
     clk => clk,
     rst => rst,
@@ -648,7 +651,14 @@ begin
     dispatch_operand2 => dispatch_operand2,
     dispatch => mem_dispatch,
     dispatch_tag => rob_bottom,
-    dispatchable => mem_dispatchable);
+    dispatchable => mem_dispatchable,
+    rob_top_committable => rob_top_committable,
+    rob_top => rob_top,
+    ls_committable => open, -- TODO
+    issue => open,
+    issue_tag => open,
+    issue_isstore => open,
+    issue_operand0 => open);
 
   cdb_available(1) <= '0';
 

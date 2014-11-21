@@ -21,6 +21,7 @@ entity reorder_buffer is
     dispatch_branch : in value_or_tag_t;
     dispatch_predicted_branch : in unsigned(31 downto 0);
     rob_top_committable : out std_logic;
+    rob_top : out tomasulo_tag_t;
     rob_top_type : out rob_type_t;
     rob_top_dest : out internal_register_t;
     rob_top_val : out value_or_tag_t;
@@ -60,6 +61,7 @@ architecture behavioral of reorder_buffer is
   signal internal_rob_top_committable : std_logic;
   signal internal_refetch : std_logic;
 begin
+  rob_top <= rob_start;
   rob_bottom <= rob_end;
   rob_top_committable <= internal_rob_top_committable;
   internal_rob_top_committable <=
@@ -100,6 +102,7 @@ begin
       rob_end <= (others => '0');
     elsif rising_edge(clk) then
       if internal_refetch = '1' then
+        rob_entries_busy <= (others => '0');
         rob_start <= (others => '0');
         rob_end <= (others => '0');
       else
