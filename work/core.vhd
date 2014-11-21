@@ -92,6 +92,13 @@ architecture behavioral of core is
   signal mem_dispatch : std_logic := '0';
   signal mem_issue_operand0 : unsigned(31 downto 0);
 
+  signal branch_dispatchable : std_logic;
+  signal branch_dispatch : std_logic := '0';
+  signal branch_available : std_logic;
+  signal branch_issue : std_logic;
+  signal branch_opcode : unsigned(1 downto 0);
+  signal branch_operands : unsigned_word_array_t(0 to 3);
+
   signal alu_dispatchable : std_logic;
   signal alu_dispatch : std_logic := '0';
   signal alu_available : std_logic;
@@ -556,7 +563,7 @@ begin
     value_or_tag_from_value(dispatch_operand3)
   );
 
-  any_dispatch <= mem_dispatch or alu_dispatch;
+  any_dispatch <= mem_dispatch or branch_dispatch or alu_dispatch;
 
   dispatch_combinational :
   process(unit_id, unit_operation, operand0_addr, operand1_addr,
@@ -631,6 +638,70 @@ begin
   cdb_available(1) <= mem_avail_read;
   cdb_value(1) <= mem_data_read;
   cdb_tag(1) <= mem_tag_read;
+
+  branch_dispatch <=
+    branch_dispatchable when
+      decoded_instruction_available = '1' and unit_id = unit_branch
+    else '0';
+  branch_available <= '1';
+
+  branch_reservation_station : reservation_station
+  generic map (
+    unit_name => "branch",
+    latency => 1,
+    num_entries => 2,
+    num_operands => 4,
+    opcode_len => 2)
+  port map (
+    clk => clk,
+    rst => rst,
+    refetch => refetch,
+    cdb_in_available => cdb_available,
+    cdb_in_value => cdb_value,
+    cdb_in_tag => cdb_tag,
+    dispatch_opcode => unit_operation(1 downto 0),
+    dispatch_operands => dispatch_operands_4,
+    dispatch => branch_dispatch,
+    dispatch_tag => rob_bottom,
+    dispatchable => branch_dispatchable,
+    unit_available => branch_available,
+    issue => branch_issue,
+    issue_opcode => branch_opcode,
+    issue_operands => branch_operands,
+    broadcast_available => cdb_available(2),
+    broadcast_tag => cdb_tag(2));
+
+  branch_process : process(clk, rst)
+    variable compar_result : std_logic;
+    variable branch_result : unsigned(31 downto 0);
+  begin
+    if rst = '1' then
+    elsif rising_edge(clk) then
+      assert TO_X01(branch_issue) /= 'X'
+        report "metavalue detected in branch_issue"
+          severity failure;
+      branch_result := (others => '-');
+      if branch_issue = '1' then
+        assert TO_01(branch_operands(0), 'X')(0) /= 'X'
+          report "metavalue detected in branch_operands(0)"
+            severity failure;
+        assert TO_01(branch_operands(1), 'X')(0) /= 'X'
+          report "metavalue detected in branch_operands(1)"
+            severity failure;
+        if branch_operands(0) = branch_operands(1) then
+          compar_result := '1';
+        else
+          compar_result := '0';
+        end if;
+        if (compar_result xor branch_opcode(0)) = '1' then
+          branch_result := branch_operands(3);
+        else
+          branch_result := branch_operands(2);
+        end if;
+      end if;
+      cdb_value(2) <= branch_result;
+    end if;
+  end process branch_process;
 
   alu_dispatch <=
     alu_dispatchable when
