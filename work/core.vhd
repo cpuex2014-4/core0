@@ -35,16 +35,6 @@ architecture behavioral of core is
   signal cdb_value : cdb_in_value_t;
   signal cdb_tag : cdb_in_tag_t;
 
-  type instruction_memory_t is
-    array(0 to 16#ffff#) of unsigned(31 downto 0);
-  signal instruction_memory : instruction_memory_t;
-  attribute ram_style of instruction_memory: signal is "block";
-  signal instruction_rom : instruction_rom_t := instruction_rom_data;
-  attribute ram_style of instruction_rom: signal is "block";
-
-  signal instruction_register_from_memory : unsigned(31 downto 0);
-  signal instruction_register_from_rom : unsigned(31 downto 0);
-
   signal program_counter : unsigned(29 downto 0)
     := initial_program_counter(31 downto 2);
 
@@ -53,7 +43,6 @@ architecture behavioral of core is
 
   -- instruction fetch
   signal program_counter_plus1 : unsigned(29 downto 0);
-  signal instruction_selector : unsigned(1 downto 0);
   signal instruction_register : unsigned(31 downto 0);
   signal instruction_predicted_branch : unsigned(29 downto 0);
   signal instruction_register_available : std_logic := '0';
@@ -125,29 +114,14 @@ architecture behavioral of core is
   signal calc_commit : std_logic;
   signal any_commit: std_logic;
 begin
-  instruction_register <=
-    (others => 'X') when TO_01(instruction_selector, 'X')(0) = 'X' else
-    instruction_register_from_memory
-      when instruction_selector = "00" else
-    instruction_register_from_rom
-      when instruction_selector = "01" else
-    (others => '-');
+  mem_inst_addr <= program_counter;
+  instruction_register <= mem_inst_data;
 
-  instruction_fetch_brom_sequential : process(clk)
-  begin
-    if rising_edge(clk) then
-      -- instruction_register_from_memory <=
-      --   instruction_memory(to_integer(program_counter(15 downto 0)));
-      instruction_register_from_rom <=
-        instruction_rom(to_integer(program_counter(4 downto 0)));
-    end if;
-  end process instruction_fetch_brom_sequential;
   instruction_fetch_sequential : process(clk, rst)
   begin
     if rst = '1' then
       program_counter <= initial_program_counter(31 downto 2);
       program_counter_plus1 <= (others => '-');
-      instruction_selector <= (others => '-');
       instruction_predicted_branch <= (others => '-');
       instruction_register_available <= '0';
     elsif rising_edge(clk) then
@@ -166,7 +140,6 @@ begin
             severity note;
         program_counter <= refetch_address(31 downto 2);
         program_counter_plus1 <= (others => '-');
-        instruction_selector <= (others => '-');
         instruction_predicted_branch <= (others => '-');
         instruction_register_available <= '0';
       elsif instruction_fetch_stall /= '1' then
@@ -176,13 +149,6 @@ begin
         assert not debug_instruction_fetch
           report "program_counter = " & hex_of_word(program_counter&"00")
             severity note;
-        if program_counter(26 downto 16) = "00000000000" then
-          instruction_selector <= "00";
-        elsif program_counter(26 downto 5) = "1111111000000000000000" then
-          instruction_selector <= "01";
-        else
-          instruction_selector <= "10";
-        end if;
         program_counter <= program_counter + 1;
         program_counter_plus1 <= program_counter + 1;
         instruction_predicted_branch <= program_counter + 1;
