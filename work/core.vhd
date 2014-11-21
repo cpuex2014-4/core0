@@ -101,6 +101,7 @@ architecture behavioral of core is
 
   signal mem_dispatchable : std_logic := '0';
   signal mem_dispatch : std_logic := '0';
+  signal mem_issue_operand0 : unsigned(31 downto 0);
 
   signal alu_dispatchable : std_logic;
   signal alu_dispatch : std_logic := '0';
@@ -654,12 +655,16 @@ begin
     rob_top_committable => rob_top_committable,
     rob_top => rob_top,
     ls_committable => open, -- TODO
-    issue => open,
-    issue_tag => open,
-    issue_isstore => open,
-    issue_operand0 => open);
+    issue => mem_enable,
+    issue_tag => mem_tag,
+    issue_isstore => mem_isstore,
+    issue_operand0 => mem_issue_operand0);
+  mem_addr <= mem_issue_operand0(31 downto 2);
+  mem_bytes <= "1111";
 
-  cdb_available(1) <= '0';
+  cdb_available(1) <= mem_avail_read;
+  cdb_value(1) <= mem_data_read;
+  cdb_tag(1) <= mem_tag_read;
 
   alu_dispatch <=
     alu_dispatchable when
@@ -726,6 +731,4 @@ begin
       end loop;
     end if;
   end process cdb_inspect;
-  mem_enable <= '0';
-  mem_isstore <= '0';
 end behavioral;

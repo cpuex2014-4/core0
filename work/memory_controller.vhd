@@ -59,9 +59,9 @@ architecture behavioral of memory_controller is
   signal read_data_from_sram_delay1 : std_logic;
   signal read_data_from_sram_delay2 : std_logic;
   signal read_data_from_sram_delay3 : std_logic;
-  signal enable_delay1 : std_logic;
-  signal enable_delay2 : std_logic;
-  signal enable_delay3 : std_logic;
+  signal enable_delay1 : std_logic := '0';
+  signal enable_delay2 : std_logic := '0';
+  signal enable_delay3 : std_logic := '0';
   signal tag_delay1 : tomasulo_tag_t;
   signal tag_delay2 : tomasulo_tag_t;
   signal tag_delay3 : tomasulo_tag_t;
@@ -120,7 +120,7 @@ begin
           elsif addr & "00" = x"FFFF0000" then
             read_data_from_sram_delay1 <= '0';
             non_sram_data_delay1 <=
-              (31 downto 2 => '-',
+              (31 downto 2 => '0',
                1 => '0',
                0 => not rs232c_recv_empty);
           elsif addr & "00" = x"FFFF0004" then
