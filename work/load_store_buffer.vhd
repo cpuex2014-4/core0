@@ -267,9 +267,10 @@ begin
       for i in 0 to num_stage2_entries-1 loop
         stage2_entries_issuable(i) :=
           stage2_entries_busy(i) and
-          ((not stage2_entries_isstore(i)) or
-          (rob_top_committable and
-           compar_unsigned(stage2_entries_tag(i), rob_top)));
+          (not (stage2_entries_isstore(i) or
+                stage2_entries_operand0(i)(31)) or
+           (rob_top_committable and
+            compar_unsigned(stage2_entries_tag(i), rob_top)));
         for j in 0 to i-1 loop
           stage2_entries_issuable(i) :=
             stage2_entries_issuable(i) and

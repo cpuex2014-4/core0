@@ -32,10 +32,17 @@ entity cpu is
 end cpu;
 
 architecture behavioral of cpu is
+  signal mem_enable : std_logic;
+  signal mem_isstore : std_logic;
   signal mem_addr : unsigned(29 downto 0);
+  signal mem_bytes : unsigned(3 downto 0);
+  signal mem_tag : tomasulo_tag_t;
   signal mem_data_write : unsigned(31 downto 0);
+  signal mem_avail_read : std_logic;
   signal mem_data_read : unsigned(31 downto 0);
-  signal mem_we : std_logic;
+  signal mem_tag_read : tomasulo_tag_t;
+  signal mem_inst_addr : unsigned(29 downto 0);
+  signal mem_inst_data : unsigned(31 downto 0);
 
   signal rs232c_recv_empty : std_logic;
   signal rs232c_recv_top : unsigned(7 downto 0);
@@ -46,26 +53,34 @@ architecture behavioral of cpu is
 begin
   core_unit : core
   port map (
+    mem_enable => mem_enable,
+    mem_isstore => mem_isstore,
     mem_addr => mem_addr,
+    mem_bytes => mem_bytes,
+    mem_tag => mem_tag,
     mem_data_write => mem_data_write,
+    mem_avail_read => mem_avail_read,
     mem_data_read => mem_data_read,
-    mem_we => mem_we,
-    rs232c_recv_empty => rs232c_recv_empty,
-    rs232c_recv_top => rs232c_recv_top,
-    rs232c_recv_consume => rs232c_recv_consume,
-    rs232c_send_full => rs232c_send_full,
-    rs232c_send_bottom => rs232c_send_bottom,
-    rs232c_send_push => rs232c_send_push,
+    mem_tag_read => mem_tag_read,
+    mem_inst_addr => mem_inst_addr,
+    mem_inst_data => mem_inst_data,
     clk => clk,
     rst => rst);
 
   mem : memory_controller
   port map (
     clk => clk,
+    enable => mem_enable,
+    isstore => mem_isstore,
     addr => mem_addr,
+    bytes => mem_bytes,
+    tag => mem_tag,
     data_write => mem_data_write,
+    avail_read => mem_avail_read,
     data_read => mem_data_read,
-    we => mem_we,
+    tag_read => mem_tag_read,
+    inst_addr => mem_inst_addr,
+    inst_data => mem_inst_data,
     ZD => ZD,
     ZDP => ZDP,
     ZA => ZA,
@@ -80,7 +95,13 @@ begin
     ADVA => ADVA,
     XFT => XFT,
     XLBO => XLBO,
-    ZZA => ZZA);
+    ZZA => ZZA,
+    rs232c_recv_empty => rs232c_recv_empty,
+    rs232c_recv_top => rs232c_recv_top,
+    rs232c_recv_consume => rs232c_recv_consume,
+    rs232c_send_full => rs232c_send_full,
+    rs232c_send_bottom => rs232c_send_bottom,
+    rs232c_send_push => rs232c_send_push);
 
   rs232c_unit : io_rs232c
   port map (

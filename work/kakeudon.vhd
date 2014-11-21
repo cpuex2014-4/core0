@@ -115,17 +115,19 @@ package kakeudon is
   component core is
     port (
       -- Memory Controller
+      -- main read/write
+      mem_enable : out std_logic;
+      mem_isstore : out std_logic;
       mem_addr : out unsigned(29 downto 0);
+      mem_bytes : out unsigned(3 downto 0);
+      mem_tag : out tomasulo_tag_t;
       mem_data_write : out unsigned(31 downto 0);
+      mem_avail_read : in std_logic;
       mem_data_read : in unsigned(31 downto 0);
-      mem_we : out std_logic;
-      -- RS-232C I/O Controller
-      rs232c_recv_empty : in std_logic;
-      rs232c_recv_top : in unsigned(7 downto 0);
-      rs232c_recv_consume : out std_logic;
-      rs232c_send_full : in std_logic;
-      rs232c_send_bottom : out unsigned(7 downto 0);
-      rs232c_send_push : out std_logic;
+      mem_tag_read : in tomasulo_tag_t;
+      -- instruction
+      mem_inst_addr : out unsigned(29 downto 0);
+      mem_inst_data : in unsigned(31 downto 0);
       -- Clock And Reset
       clk : in std_logic;
       rst : in std_logic);
@@ -177,10 +179,19 @@ package kakeudon is
   component memory_controller is
     port (
       clk : in std_logic;
+      -- main read/write
+      enable : in std_logic;
+      isstore : in std_logic;
       addr : in unsigned(29 downto 0);
+      bytes : in unsigned(3 downto 0);
+      tag : in tomasulo_tag_t;
       data_write : in unsigned(31 downto 0);
+      avail_read : out std_logic;
       data_read : out unsigned(31 downto 0);
-      we : in std_logic;
+      tag_read : out tomasulo_tag_t;
+      -- instruction
+      inst_addr : in unsigned(29 downto 0);
+      inst_data : out unsigned(31 downto 0);
       -- SRAM
       ZD : inout std_logic_vector(31 downto 0); -- SRAM Data
       ZDP : inout std_logic_vector(3 downto 0); -- SRAM Data, Parity
@@ -194,7 +205,14 @@ package kakeudon is
       ADVA : out std_logic; -- SRAM Burst Mode / Negative Load Address
       XFT : out std_logic; -- SRAM Flow Through Mode
       XLBO : out std_logic; -- SRAM Linear Burst Order
-      ZZA : out std_logic); -- SRAM Sleep Mode
+      ZZA : out std_logic; -- SRAM Sleep Mode
+      -- RS-232C I/O Controller
+      rs232c_recv_empty : in std_logic;
+      rs232c_recv_top : in unsigned(7 downto 0);
+      rs232c_recv_consume : out std_logic;
+      rs232c_send_full : in std_logic;
+      rs232c_send_bottom : out unsigned(7 downto 0);
+      rs232c_send_push : out std_logic);
   end component memory_controller;
 
   component io_rs232c is
@@ -316,6 +334,9 @@ package kakeudon is
   function hex_of_word(u:unsigned(31 downto 0)) return string;
   function dec_of_unsigned(u:unsigned) return string;
   function str_of_float(f:unsigned(31 downto 0)) return string;
+
+  constant initial_program_counter : unsigned(31 downto 0)
+    := x"BFC00000";
 
   type instruction_rom_t is
     array(0 to 31) of unsigned(31 downto 0);

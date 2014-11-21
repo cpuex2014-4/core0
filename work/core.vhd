@@ -9,18 +9,19 @@ use work.kakeudon.all;
 
 entity core is
   port (
-    -- Memory Controller
+    -- main read/write
+    mem_enable : out std_logic;
+    mem_isstore : out std_logic;
     mem_addr : out unsigned(29 downto 0);
+    mem_bytes : out unsigned(3 downto 0);
+    mem_tag : out tomasulo_tag_t;
     mem_data_write : out unsigned(31 downto 0);
+    mem_avail_read : in std_logic;
     mem_data_read : in unsigned(31 downto 0);
-    mem_we : out std_logic;
-    -- RS-232C I/O Controller
-    rs232c_recv_empty : in std_logic;
-    rs232c_recv_top : in unsigned(7 downto 0);
-    rs232c_recv_consume : out std_logic := '0';
-    rs232c_send_full : in std_logic;
-    rs232c_send_bottom : out unsigned(7 downto 0);
-    rs232c_send_push : out std_logic := '0';
+    mem_tag_read : in tomasulo_tag_t;
+    -- instruction
+    mem_inst_addr : out unsigned(29 downto 0);
+    mem_inst_data : in unsigned(31 downto 0);
     -- Clock And Reset
     clk : in std_logic;
     rst : in std_logic);
@@ -45,7 +46,7 @@ architecture behavioral of core is
   signal instruction_register_from_rom : unsigned(31 downto 0);
 
   signal program_counter : unsigned(29 downto 0)
-    := "101111111100000000000000000000"; -- 0xBFC00000
+    := initial_program_counter(31 downto 2);
 
   signal refetch : std_logic;
   signal refetch_address : unsigned(31 downto 0);
@@ -143,7 +144,7 @@ begin
   instruction_fetch_sequential : process(clk, rst)
   begin
     if rst = '1' then
-      program_counter <= "101111111100000000000000000000";
+      program_counter <= initial_program_counter(31 downto 2);
       program_counter_plus1 <= (others => '-');
       instruction_selector <= (others => '-');
       instruction_predicted_branch <= (others => '-');
@@ -191,8 +192,6 @@ begin
 
   instruction_fetch_stall <=
     instruction_register_available and decode_stall;
-
-  rs232c_send_bottom <= instruction_register(7 downto 0);
 
   decode_sequential : process(clk, rst)
     variable d_opcode : opcode_t;
@@ -727,5 +726,6 @@ begin
       end loop;
     end if;
   end process cdb_inspect;
-  mem_we <= '0';
+  mem_enable <= '0';
+  mem_isstore <= '0';
 end behavioral;
