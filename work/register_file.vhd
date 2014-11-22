@@ -62,35 +62,45 @@ begin
         assert TO_01(wr0_addr, 'X')(0) /= 'X'
           report "metavalue detected in wr0_addr"
             severity failure;
-        assert TO_01(wr0_tag, 'X')(0) /= 'X'
-          report "metavalue detected in wr0_tag"
-            severity failure;
-        assert not debug_out
-          report name_of_internal_register(wr0_addr) &
-                 " <- tag(" & integer'image(to_integer(wr0_tag)) & ")"
-            severity note;
-        reg(to_integer(wr0_addr)).available <= '0';
-        -- do not discard value, in order to rollback
-        -- reg(to_integer(wr0_addr)).value <= (others => '-');
-        reg(to_integer(wr0_addr)).tag <= wr0_tag;
+        if wr0_addr /= 0 then
+          assert TO_01(wr0_tag, 'X')(0) /= 'X'
+            report "metavalue detected in wr0_tag"
+              severity failure;
+          assert not debug_out
+            report name_of_internal_register(wr0_addr) &
+                   " <- tag(" & integer'image(to_integer(wr0_tag)) & ")"
+              severity note;
+          reg(to_integer(wr0_addr)).available <= '0';
+          -- do not discard value, in order to rollback
+          -- reg(to_integer(wr0_addr)).value <= (others => '-');
+          reg(to_integer(wr0_addr)).tag <= wr0_tag;
+        end if;
       end if;
       if wr1_enable = '1' then
         assert TO_01(wr1_addr, 'X')(0) /= 'X'
           report "metavalue detected in wr1_addr"
             severity failure;
-        assert TO_01(wr1_value, 'X')(0) /= 'X'
-          report "metavalue detected in wr1_value"
-            severity failure;
-        if not (wr0_enable = '1' and wr0_addr = wr1_addr) then
-          assert not debug_out
-            report name_of_internal_register(wr1_addr) &
-                   " <- " & hex_of_word(wr1_value)
-              severity note;
-          reg(to_integer(wr1_addr)) <=
-            ('1', wr1_value, (others => '-'));
+        if wr1_addr /= 0 then
+          assert TO_01(wr1_value, 'X')(0) /= 'X'
+            report "metavalue detected in wr1_value"
+              severity failure;
+          if not (wr0_enable = '1' and wr0_addr = wr1_addr) then
+            assert not debug_out
+              report name_of_internal_register(wr1_addr) &
+                     " <- " & hex_of_word(wr1_value)
+                severity note;
+            reg(to_integer(wr1_addr)) <=
+              ('1', wr1_value, (others => '-'));
+          end if;
         end if;
       end if;
       if refetch = '1' then
+        assert not debug_out
+          report "refetch; " &
+              "wr1_enable = " & std_ulogic'image(wr1_enable) & ", " &
+              "wr1_addr = " & name_of_internal_register(wr1_addr) & ", " &
+              "wr1_value = " & hex_of_word(wr1_value)
+            severity note;
         for i in 0 to num_entries-1 loop
           reg(i).available <= '1';
         end loop;

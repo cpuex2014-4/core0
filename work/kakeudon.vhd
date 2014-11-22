@@ -17,7 +17,7 @@ package kakeudon is
   type cdb_in_value_t is array(0 to cdb_size-1) of unsigned_word;
   type cdb_in_tag_t is array(0 to cdb_size-1) of tomasulo_tag_t;
 
-  type rob_type_t is (rob_type_branch, rob_type_store, rob_type_calc);
+  type rob_type_t is (rob_type_store, rob_type_calc);
 
   type value_or_tag_t is record
     available : std_logic;

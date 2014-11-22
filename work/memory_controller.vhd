@@ -46,6 +46,8 @@ entity memory_controller is
 end entity memory_controller;
 
 architecture behavioral of memory_controller is
+  constant debug_out : boolean := true;
+
   type instruction_memory_t is
     array(0 to 16#ffff#) of unsigned(31 downto 0);
   signal instruction_memory : instruction_memory_t;
@@ -135,6 +137,10 @@ begin
           assert TO_01(addr,'X')(0) /= 'X'
             report "metavalue detected in addr"
               severity warning;
+          assert not debug_out
+            report "Memory[" & hex_of_word(addr&"00") & "] <- " &
+              hex_of_word(data_write)
+                severity note;
           read_data_from_sram_delay1 <= '-';
           non_sram_data_delay1 <= (others => '-');
         end if;
@@ -163,7 +169,7 @@ begin
         inst_data <=
           instruction_rom(to_integer(inst_addr(4 downto 0)));
       else
-        inst_data <= (others => '-');
+        inst_data <= (others => '0');
       end if;
 
       rs232c_recv_consume <= next_rs232c_recv_consume;

@@ -63,7 +63,6 @@ architecture behavioral of core is
   signal operand2_immediate_val : unsigned(31 downto 0);
   signal operand3_immediate_val : unsigned(31 downto 0);
   signal destination_addr : internal_register_t;
-  signal destination_enable : std_logic := '0';
   signal decode_val_from_reg : std_logic;
   signal decode_branch_from_reg : std_logic;
   signal decode_branch_available : std_logic;
@@ -196,7 +195,6 @@ begin
     variable next_operand1_immediate_val : unsigned(31 downto 0);
     variable next_operand2_immediate_val : unsigned(31 downto 0);
     variable next_operand3_immediate_val : unsigned(31 downto 0);
-    variable next_destination_enable : std_logic;
     variable next_destination_addr : internal_register_t;
     variable next_decode_val_from_reg : std_logic;
     variable next_decode_branch_from_reg : std_logic;
@@ -216,8 +214,7 @@ begin
       operand1_immediate_val <= (others => '-');
       operand2_immediate_val <= (others => '-');
       operand3_immediate_val <= (others => '-');
-      destination_enable <= '0';
-      destination_addr <= (others => '-');
+      destination_addr <= (others => '0');
       decode_val_from_reg <= '-';
       decode_branch_from_reg <= '-';
       decode_branch_available <= '-';
@@ -237,8 +234,7 @@ begin
         operand1_immediate_val <= (others => '-');
         operand2_immediate_val <= (others => '-');
         operand3_immediate_val <= (others => '-');
-        destination_enable <= '0';
-        destination_addr <= (others => '-');
+        destination_addr <= (others => '0');
         decode_val_from_reg <= '-';
         decode_branch_from_reg <= '-';
         decode_branch_available <= '-';
@@ -257,7 +253,6 @@ begin
         next_operand1_immediate_val := (others => '-');
         next_operand2_immediate_val := (others => '-');
         next_operand3_immediate_val := (others => '-');
-        next_destination_enable := '-';
         next_destination_addr := (others => '-');
         next_decode_val_from_reg := '-';
         next_decode_branch_from_reg := '-';
@@ -294,7 +289,6 @@ begin
             next_operand0_immediate_val := d_zero_ext_sa;
             next_operand1_use_immediate := '0';
             next_operand1_addr := d_rt;
-            next_destination_enable := '1';
             next_destination_addr := d_rd;
             next_decode_val_from_reg := '0';
             next_decode_branch_from_reg := '0';
@@ -311,19 +305,32 @@ begin
             next_operand1_use_immediate := '0';
             next_operand1_addr := d_rt;
             next_operand1_immediate_val := (others => '-');
-            next_destination_enable := '1';
             next_destination_addr := d_rd;
             next_decode_val_from_reg := '0';
             next_decode_branch_from_reg := '0';
             next_decode_branch_available := '1';
             next_decode_branch_value := program_counter_plus1 & "00";
             next_decoded_instruction_available := '1';
+          when FUNCT_JR =>
+            next_decode_rob_type := rob_type_calc;
+            next_unit_id := unit_alu;
+            next_unit_operation :=
+              to_unsigned(ALU_OP_ADDU, unit_operation'length);
+            next_operand0_use_immediate := '0';
+            next_operand0_addr := d_rs;
+            next_operand1_use_immediate := '0';
+            next_operand1_addr := d_rt;
+            next_destination_addr := d_zero;
+            next_decode_val_from_reg := '0';
+            next_decode_branch_from_reg := '1';
+            next_decode_branch_available := '0';
+            next_decoded_instruction_available := '1';
           when others =>
             report "unknown SPECIAL funct " & bin_of_int(d_funct,6)
               severity failure;
           end case;
         when OP_J =>
-          next_decode_rob_type := rob_type_branch;
+          next_decode_rob_type := rob_type_calc;
           next_unit_id := unit_alu;
           next_unit_operation :=
             to_unsigned(ALU_OP_ADDU, unit_operation'length);
@@ -331,7 +338,7 @@ begin
           next_operand0_addr := d_zero;
           next_operand1_use_immediate := '1';
           next_operand1_immediate_val := program_counter_plus1 & "00";
-          next_destination_enable := '0';
+          next_destination_addr := d_zero;
           next_decode_val_from_reg := '0';
           next_decode_branch_from_reg := '0';
           next_decode_branch_available := '1';
@@ -340,7 +347,7 @@ begin
             instruction_register(25 downto 0) & "00";
           next_decoded_instruction_available := '1';
         when OP_JAL =>
-          next_decode_rob_type := rob_type_branch;
+          next_decode_rob_type := rob_type_calc;
           next_unit_id := unit_alu;
           next_unit_operation :=
             to_unsigned(ALU_OP_ADDU, unit_operation'length);
@@ -348,7 +355,6 @@ begin
           next_operand0_addr := d_zero;
           next_operand1_use_immediate := '1';
           next_operand1_immediate_val := program_counter_plus1 & "00";
-          next_destination_enable := '1';
           next_destination_addr := d_ra;
           next_decode_val_from_reg := '0';
           next_decode_branch_from_reg := '0';
@@ -357,11 +363,16 @@ begin
             program_counter_plus1(29 downto 26) &
             instruction_register(25 downto 0) & "00";
           next_decoded_instruction_available := '1';
-        when OP_BEQ =>
-          next_decode_rob_type := rob_type_branch;
+        when OP_BEQ | OP_BNE =>
+          next_decode_rob_type := rob_type_calc;
           next_unit_id := unit_branch;
-          next_unit_operation :=
-            to_unsigned(0, unit_operation'length);
+          if d_opcode = OP_BEQ then
+            next_unit_operation :=
+              to_unsigned(0, unit_operation'length);
+          else
+            next_unit_operation :=
+              to_unsigned(1, unit_operation'length);
+          end if;
           next_operand0_use_immediate := '0';
           next_operand0_addr := d_rs;
           next_operand1_use_immediate := '0';
@@ -371,7 +382,7 @@ begin
           next_operand3_immediate_val :=
             unsigned(signed(program_counter_plus1) + signed(d_short_imm))
             & "00";
-          next_destination_enable := '0';
+          next_destination_addr := d_zero;
           next_decode_val_from_reg := '0';
           next_decode_branch_from_reg := '0';
           next_decode_branch_available := '0';
@@ -385,7 +396,6 @@ begin
           next_operand0_addr := d_rs;
           next_operand1_use_immediate := '1';
           next_operand1_immediate_val := d_sign_ext_imm;
-          next_destination_enable := '1';
           next_destination_addr := d_rt;
           next_decode_val_from_reg := '0';
           next_decode_branch_from_reg := '0';
@@ -401,7 +411,6 @@ begin
           next_operand0_addr := d_rs;
           next_operand1_use_immediate := '1';
           next_operand1_immediate_val := d_sign_ext_imm;
-          next_destination_enable := '1';
           next_destination_addr := d_rt;
           next_decode_val_from_reg := '0';
           next_decode_branch_from_reg := '0';
@@ -418,7 +427,6 @@ begin
             to_unsigned(16, operand0_immediate_val'length);
           next_operand1_use_immediate := '1';
           next_operand1_immediate_val := d_zero_ext_imm;
-          next_destination_enable := '1';
           next_destination_addr := d_rt;
           next_decode_val_from_reg := '0';
           next_decode_branch_from_reg := '0';
@@ -435,7 +443,6 @@ begin
           next_operand1_use_immediate := '1';
           next_operand1_immediate_val := (others => '-');
           next_operand2_immediate_val := d_sign_ext_imm;
-          next_destination_enable := '1';
           next_destination_addr := d_rt;
           next_decode_val_from_reg := '0';
           next_decode_branch_from_reg := '0';
@@ -457,7 +464,6 @@ begin
         operand1_immediate_val <= next_operand1_immediate_val;
         operand2_immediate_val <= next_operand2_immediate_val;
         operand3_immediate_val <= next_operand3_immediate_val;
-        destination_enable <= next_destination_enable;
         destination_addr <= next_destination_addr;
         decode_val_from_reg <= next_decode_val_from_reg;
         decode_branch_from_reg <= next_decode_branch_from_reg;
@@ -477,8 +483,7 @@ begin
         operand1_immediate_val <= (others => '-');
         operand2_immediate_val <= (others => '-');
         operand3_immediate_val <= (others => '-');
-        destination_enable <= '0';
-        destination_addr <= (others => '-');
+        destination_addr <= (others => '0');
         decode_val_from_reg <= '-';
         decode_branch_from_reg <= '-';
         decode_branch_available <= '-';
@@ -565,15 +570,6 @@ begin
 
   any_dispatch <= mem_dispatch or branch_dispatch or alu_dispatch;
 
-  dispatch_combinational :
-  process(unit_id, unit_operation, operand0_addr, operand1_addr,
-    operand0_immediate_val, operand0_use_immediate,
-    operand1_immediate_val, operand1_use_immediate,
-    destination_addr, destination_enable,
-    decoded_instruction_available)
-  begin
-  end process dispatch_combinational;
-
   dispatch_sequential : process(clk, rst)
   begin
     if rst = '1' then
@@ -582,7 +578,7 @@ begin
     end if;
   end process dispatch_sequential;
 
-  wr0_enable <= any_dispatch and destination_enable;
+  wr0_enable <= any_dispatch and not refetch;
 
   reg : register_file
   port map (
@@ -648,7 +644,7 @@ begin
   branch_reservation_station : reservation_station
   generic map (
     unit_name => "branch",
-    latency => 1,
+    latency => 2,
     num_entries => 2,
     num_operands => 4,
     opcode_len => 2)

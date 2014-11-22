@@ -114,6 +114,9 @@ begin
             severity failure;
 
         if dispatch = '1' then
+          assert TO_01(dispatch_dest, 'X')(0) /= 'X'
+            report "metavalue detected in dispatch_dest"
+              severity failure;
           rob_entries_busy(to_integer(rob_end)) <= '1';
           rob_entries_type(to_integer(rob_end)) <= dispatch_type;
           rob_entries_dest(to_integer(rob_end)) <= dispatch_dest;
@@ -126,6 +129,15 @@ begin
           rob_entries_branch(to_integer(rob_end)) <= dispatch_branch;
           rob_entries_predicted_branch(to_integer(rob_end)) <=
             dispatch_predicted_branch;
+
+          assert not debug_out
+            report
+                "ROB(" & dec_of_unsigned(rob_end) & ") <- " &
+                "(type = " & rob_type_t'image(dispatch_type) & ", " &
+                "dest = " & name_of_internal_register(dispatch_dest) & ", " &
+                "val = " & str_of_value_or_tag(dispatch_rob_val) & ", " &
+                "branch = " & str_of_value_or_tag(dispatch_branch) & ", " &
+                "predict = " & hex_of_word(dispatch_predicted_branch) & ")";
 
           rob_end <= rob_end + 1;
         end if;
@@ -145,13 +157,13 @@ begin
               snoop(rob_entries_val(i),
                     cdb_in_available, cdb_in_value, cdb_in_tag,
                     debug_out,
-                    "ROB(" & integer'image(i) & ").val: ");
+                    "ROB(" & integer'image(i) & ").val");
 
             rob_entries_branch(i) <=
               snoop(rob_entries_branch(i),
                     cdb_in_available, cdb_in_value, cdb_in_tag,
                     debug_out,
-                    "ROB(" & integer'image(i) & ").branch: ");
+                    "ROB(" & integer'image(i) & ").branch");
           end if;
         end loop;
       end if;
