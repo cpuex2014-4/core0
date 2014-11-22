@@ -55,6 +55,10 @@ architecture behavioral of memory_controller is
   signal instruction_rom : instruction_rom_t := instruction_rom_data;
   attribute ram_style of instruction_rom: signal is "block";
 
+  signal instruction_source : unsigned(1 downto 0);
+  signal inst_data_0 : unsigned(31 downto 0);
+  signal inst_data_1 : unsigned(31 downto 0);
+
   signal non_sram_data_delay1 : unsigned(31 downto 0);
   signal non_sram_data_delay2 : unsigned(31 downto 0);
   signal non_sram_data_delay3 : unsigned(31 downto 0);
@@ -160,20 +164,40 @@ begin
         end if;
       end if;
 
+      -- if TO_01(inst_addr, 'X')(0) = 'X' then
+      --   inst_data <= (others => '-');
+      -- elsif inst_addr(26 downto 16) = "00000000000" then
+      --   inst_data <=
+      --     instruction_memory(to_integer(inst_addr(15 downto 0)));
+      -- elsif inst_addr(26 downto 5) = "1111111000000000000000" then
+      --   inst_data <=
+      --     instruction_rom(to_integer(inst_addr(4 downto 0)));
+      -- else
+      --   inst_data <= (others => '0');
+      -- end if;
       if TO_01(inst_addr, 'X')(0) = 'X' then
-        inst_data <= (others => '-');
-      elsif inst_addr(26 downto 16) = "00000000000" then
-        inst_data <=
-          instruction_memory(to_integer(inst_addr(15 downto 0)));
-      elsif inst_addr(26 downto 5) = "1111111000000000000000" then
-        inst_data <=
-          instruction_rom(to_integer(inst_addr(4 downto 0)));
+        instruction_source <= (others => '-');
+        inst_data_0 <= (others => '-');
+        inst_data_1 <= (others => '-');
       else
-        inst_data <= (others => '0');
+        if inst_addr(26 downto 16) = "00000000000" then
+          instruction_source <= "00";
+        elsif inst_addr(26 downto 5) = "1111111000000000000000" then
+          instruction_source <= "01";
+        else
+          instruction_source <= "11";
+        end if;
+        inst_data_0 <= instruction_memory(to_integer(inst_addr(15 downto 0)));
+        inst_data_1 <= instruction_rom(to_integer(inst_addr(4 downto 0)));
       end if;
 
       rs232c_recv_consume <= next_rs232c_recv_consume;
     end if;
   end process sequential;
+  inst_data <=
+    (others => 'X') when TO_01(instruction_source, 'X')(0) = 'X' else
+    inst_data_0 when instruction_source = "00" else
+    inst_data_1 when instruction_source = "01" else
+    (others => '0');
 end architecture behavioral;
 
