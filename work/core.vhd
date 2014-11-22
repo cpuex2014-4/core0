@@ -90,6 +90,7 @@ architecture behavioral of core is
   signal mem_dispatchable : std_logic := '0';
   signal mem_dispatch : std_logic := '0';
   signal mem_issue_operand0 : unsigned(31 downto 0);
+  signal ls_committable : std_logic;
 
   signal branch_dispatchable : std_logic;
   signal branch_dispatch : std_logic := '0';
@@ -118,6 +119,7 @@ architecture behavioral of core is
 
   -- commit
   signal calc_commit : std_logic;
+  signal store_commit : std_logic;
   signal any_commit: std_logic;
 begin
   mem_inst_addr <= program_counter;
@@ -449,6 +451,22 @@ begin
           next_decode_branch_available := '1';
           next_decode_branch_value := program_counter_plus1 & "00";
           next_decoded_instruction_available := '1';
+        when OP_SW =>
+          next_decode_rob_type := rob_type_store;
+          next_unit_id := unit_mem;
+          next_unit_operation :=
+            to_unsigned(1, unit_operation'length);
+          next_operand0_use_immediate := '0';
+          next_operand0_addr := d_rs;
+          next_operand1_use_immediate := '0';
+          next_operand1_addr := d_rt;
+          next_operand2_immediate_val := d_sign_ext_imm;
+          next_destination_addr := d_zero;
+          next_decode_val_from_reg := '1';
+          next_decode_branch_from_reg := '0';
+          next_decode_branch_available := '1';
+          next_decode_branch_value := program_counter_plus1 & "00";
+          next_decoded_instruction_available := '1';
         when others =>
           report "unknown opcode " & bin_of_int(d_opcode,6)
             severity failure;
@@ -623,13 +641,20 @@ begin
     dispatchable => mem_dispatchable,
     rob_top_committable => rob_top_committable,
     rob_top => rob_top,
-    ls_committable => open, -- TODO
+    ls_committable => ls_committable,
     issue => mem_enable,
     issue_tag => mem_tag,
     issue_isstore => mem_isstore,
     issue_operand0 => mem_issue_operand0);
   mem_addr <= mem_issue_operand0(31 downto 2);
   mem_bytes <= "1111";
+  send_data_to_memory : process(clk,rst)
+  begin
+    if rst = '1' then
+    elsif rising_edge(clk) then
+      mem_data_write <= rob_top_val.value;
+    end if;
+  end process send_data_to_memory;
 
   cdb_available(1) <= mem_avail_read;
   cdb_value(1) <= mem_data_read;
@@ -738,8 +763,12 @@ begin
     alu_in1 => alu_operands(1),
     alu_out => cdb_value(0));
 
-  calc_commit <= rob_top_committable when rob_top_type = rob_type_calc else '0';
-  any_commit <= calc_commit;
+  calc_commit <=
+    rob_top_committable when rob_top_type = rob_type_calc else '0';
+  store_commit <=
+    rob_top_committable and ls_committable
+      when rob_top_type = rob_type_store else '0';
+  any_commit <= calc_commit or store_commit;
 
   cdb_inspect : process(clk, rst)
   begin
