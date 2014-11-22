@@ -49,7 +49,7 @@ architecture behavioral of memory_controller is
   constant debug_out : boolean := true;
 
   type instruction_memory_t is
-    array(0 to 16#ffff#) of unsigned(31 downto 0);
+    array(0 to 32768-1) of unsigned(31 downto 0);
   signal instruction_memory : instruction_memory_t;
   attribute ram_style of instruction_memory: signal is "block";
   signal instruction_rom : instruction_rom_t := instruction_rom_data;
@@ -179,20 +179,20 @@ begin
         assert TO_01(addr,'X')(0) /= 'X'
           report "metavalue detected in addr"
             severity warning;
-        if addr(26 downto 16) = "00000000000" then
-          instruction_memory(to_integer(addr(15 downto 0))) <=
+        if addr(26 downto 15) = "0000000000" then
+          instruction_memory(to_integer(addr(14 downto 0))) <=
             data_write;
         end if;
       end if;
 
       -- if TO_01(inst_addr, 'X')(0) = 'X' then
       --   inst_data <= (others => '-');
-      -- elsif inst_addr(26 downto 16) = "00000000000" then
+      -- elsif inst_addr(26 downto 15) = "000000000000" then
       --   inst_data <=
-      --     instruction_memory(to_integer(inst_addr(15 downto 0)));
-      -- elsif inst_addr(26 downto 5) = "1111111000000000000000" then
+      --     instruction_memory(to_integer(inst_addr(14 downto 0)));
+      -- elsif inst_addr(26 downto 6) = "111111100000000000000" then
       --   inst_data <=
-      --     instruction_rom(to_integer(inst_addr(4 downto 0)));
+      --     instruction_rom(to_integer(inst_addr(5 downto 0)));
       -- else
       --   inst_data <= (others => '0');
       -- end if;
@@ -201,14 +201,14 @@ begin
         inst_data_0 <= (others => '-');
         inst_data_1 <= (others => '-');
       else
-        if inst_addr(26 downto 16) = "00000000000" then
+        if inst_addr(26 downto 15) = "000000000000" then
           instruction_source <= "00";
         elsif inst_addr(26 downto 6) = "111111100000000000000" then
           instruction_source <= "01";
         else
           instruction_source <= "11";
         end if;
-        inst_data_0 <= instruction_memory(to_integer(inst_addr(15 downto 0)));
+        inst_data_0 <= instruction_memory(to_integer(inst_addr(14 downto 0)));
         inst_data_1 <= instruction_rom(to_integer(inst_addr(5 downto 0)));
       end if;
 
