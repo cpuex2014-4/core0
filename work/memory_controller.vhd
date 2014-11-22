@@ -203,13 +203,13 @@ begin
       else
         if inst_addr(26 downto 16) = "00000000000" then
           instruction_source <= "00";
-        elsif inst_addr(26 downto 5) = "1111111000000000000000" then
+        elsif inst_addr(26 downto 6) = "111111100000000000000" then
           instruction_source <= "01";
         else
           instruction_source <= "11";
         end if;
         inst_data_0 <= instruction_memory(to_integer(inst_addr(15 downto 0)));
-        inst_data_1 <= instruction_rom(to_integer(inst_addr(4 downto 0)));
+        inst_data_1 <= instruction_rom(to_integer(inst_addr(5 downto 0)));
       end if;
 
       rs232c_recv_consume <= next_rs232c_recv_consume;

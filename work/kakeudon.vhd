@@ -341,43 +341,50 @@ package kakeudon is
     := x"BFC00000";
 
   type instruction_rom_t is
-    array(0 to 31) of unsigned(31 downto 0);
+    array(0 to 63) of unsigned(31 downto 0);
   -- mapped to 0xBFC00000 (0x1FC00000)
   constant instruction_rom_data : instruction_rom_t := (
   -- loader: (0xBFC00000)
-    x"24100000", -- li $s0, 0
+    x"24100000", -- 0xBFC00000 li $s0, 0
   -- loader_loop: (0xBFC00004)
-    x"24110000", -- li $s1, 0
-    x"0ff00017", -- jal loader_recv_byte
-    x"00021600", -- sll $v0, $v0, 24
-    x"02228825", -- or $s1, $s1, $v0
-    x"0ff00017", -- jal loader_recv_byte
-    x"00021400", -- sll $v0, $v0, 16
-    x"02228825", -- or $s1, $s1, $v0
-    x"0ff00017", -- jal loader_recv_byte
-    x"00021200", -- sll $v0, $v0, 8
-    x"02228825", -- or $s1, $s1, $v0
-    x"0ff00017", -- jal loader_recv_byte
-    x"02228825", -- or $s1, $s1, $v0
-    x"ae110000", -- sw $s1, 0($s0)
-    x"26100004", -- addiu $s0, $s0, 4
-    x"26310001", -- addiu $s1, $s1, 1
-    x"1620fff0", -- bne $s1, $zero, loader_loop
-    x"24080000", -- li $t0, 0
-    x"24020000", -- li $v0, 0
-    x"24100000", -- li $s0, 0
-    x"24110000", -- li $s1, 0
-    x"241f0000", -- li $ra, 0
-    x"00000008", -- jr $zero
-  -- loader_recv_byte: (0xBFC0005C)
-    x"3c08ffff", -- li $t0, 0xffff0000
-  -- rd_poll: (0xBFC00060)
-    x"8d020000", -- lw $v0, 0($t0)
-    x"30420001", -- andi $v0, $v0, 0x01
-    x"1040fffd", -- beq $v0, $zero, rd_poll
-    x"8d020004", -- lw $v0, 4($t0)
-    x"304200ff", -- andi $v0, $v0, 0xff
-    x"03e00008", -- jr $ra
+    x"24110000", -- 0xBFC00004 li $s1, 0
+    x"0ff0001d", -- 0xBFC00008 jal loader_recv_byte
+    x"00021600", -- 0xBFC0000C sll $v0, $v0, 24
+    x"02228825", -- 0xBFC00010 or $s1, $s1, $v0
+    x"0ff0001d", -- 0xBFC00014 jal loader_recv_byte
+    x"00021400", -- 0xBFC00018 sll $v0, $v0, 16
+    x"02228825", -- 0xBFC0001C or $s1, $s1, $v0
+    x"0ff0001d", -- 0xBFC00020 jal loader_recv_byte
+    x"00021200", -- 0xBFC00024 sll $v0, $v0, 8
+    x"02228825", -- 0xBFC00028 or $s1, $s1, $v0
+    x"0ff0001d", -- 0xBFC0002C jal loader_recv_byte
+    x"02228825", -- 0xBFC00030 or $s1, $s1, $v0
+    x"ae110000", -- 0xBFC00034 sw $s1, 0($s0)
+    x"26100004", -- 0xBFC00038 addiu $s0, $s0, 4
+    x"26310001", -- 0xBFC0003C addiu $s1, $s1, 1
+    x"1620fff0", -- 0xBFC00040 bne $s1, $zero, loader_loop
+    x"2610fffc", -- 0xBFC00044 addiu $s0, $s0, -4
+    x"24110020", -- 0xBFC00048 li $s1, 32
+  -- zerofill_loop: (0xBFC00048)
+    x"ae000000", -- 0xBFC0004C sw $zero, 0($s0)
+    x"26100004", -- 0xBFC00050 addiu $s0, $s0, 4
+    x"2631ffff", -- 0xBFC00054 addiu $s1, $s1, -1
+    x"1620fffc", -- 0xBFC00058 bne $s1, $zero, zerofill_loop
+    x"24080000", -- 0xBFC0005C li $t0, 0
+    x"24020000", -- 0xBFC00060 li $v0, 0
+    x"24100000", -- 0xBFC00064 li $s0, 0
+    x"24110000", -- 0xBFC00068 li $s1, 0
+    x"241f0000", -- 0xBFC0006C li $ra, 0
+    x"00000008", -- 0xBFC00070 jr $zero
+  -- loader_recv_byte: (0xBFC00074)
+    x"3c08ffff", -- 0xBFC00074 li $t0, 0xffff0000
+  -- rd_poll: (0xBFC00078)
+    x"8d020000", -- 0xBFC00078 lw $v0, 0($t0)
+    x"30420001", -- 0xBFC0007C andi $v0, $v0, 0x01
+    x"1040fffd", -- 0xBFC00080 beq $v0, $zero, rd_poll
+    x"8d020004", -- 0xBFC00084 lw $v0, 4($t0)
+    x"304200ff", -- 0xBFC00088 andi $v0, $v0, 0xff
+    x"03e00008", -- 0xBFC0008C jr $ra
     others => (others => '0')
   );
 end package kakeudon;

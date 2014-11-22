@@ -124,9 +124,16 @@ begin
             report "metavalue detected in dispatch_rob_val.available"
               severity failure;
           rob_entries_val(to_integer(rob_end)) <=
-            dispatch_rob_val;
+            snoop(dispatch_rob_val,
+                  cdb_in_available, cdb_in_value, cdb_in_tag,
+                  debug_out,
+                  "dispatch:ROB(" & dec_of_unsigned(rob_end) & ").val");
 
-          rob_entries_branch(to_integer(rob_end)) <= dispatch_branch;
+          rob_entries_branch(to_integer(rob_end)) <=
+            snoop(dispatch_branch,
+                  cdb_in_available, cdb_in_value, cdb_in_tag,
+                  debug_out,
+                  "dispatch:ROB(" & dec_of_unsigned(rob_end) & ").branch");
           rob_entries_predicted_branch(to_integer(rob_end)) <=
             dispatch_predicted_branch;
 

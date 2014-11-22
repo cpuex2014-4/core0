@@ -306,7 +306,16 @@ begin
             entries_busy(i) <= '1';
             entries_tag(i) <= dispatch_tag;
             entries_opcode(i) <= dispatch_opcode;
-            entries_operands(i) <= dispatch_operands;
+            for opid in 0 to num_operands-1 loop
+              entries_operands(i)(opid) <=
+                snoop(dispatch_operands(opid),
+                      cdb_in_available, cdb_in_value, cdb_in_tag,
+                      debug_out,
+                      "RnSn for " & unit_name & ": " &
+                      "dispatch: entry tag " &
+                        dec_of_unsigned(entries_tag(i)) &
+                      ": operand" & integer'image(opid));
+            end loop;
           elsif entries_issuable_accum(i) = '1' then
             if i = num_entries-1 then
               entries_busy(i) <= '0';

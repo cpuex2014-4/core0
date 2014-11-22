@@ -208,7 +208,13 @@ begin
             stage1_entries_busy(i) <= '1';
             stage1_entries_tag(i) <= dispatch_tag;
             stage1_entries_isstore(i) <= dispatch_isstore;
-            stage1_entries_operand0(i) <= dispatch_operand0;
+            stage1_entries_operand0(i) <=
+              snoop(dispatch_operand0,
+                    cdb_in_available, cdb_in_value, cdb_in_tag,
+                    debug_out,
+                    "LSBufer Stage 1: " &
+                    "dispatch: entry tag " &
+                      dec_of_unsigned(stage1_entries_tag(i)));
             stage1_entries_operand2(i) <= dispatch_operand2;
           elsif stage1_entries_issuable = '1' then
             if i = num_stage1_entries-1 then
