@@ -28,9 +28,9 @@ entity reorder_buffer is
     refetch : out std_logic;
     refetch_address : out unsigned(31 downto 0);
     rob_bottom : out tomasulo_tag_t;
-    rob_rd0_tag : in tomasulo_tag_t;
+    rob_rd0_reg_tag : in tomasulo_tag_t;
     rob_rd0 : out value_or_tag_t;
-    rob_rd1_tag : in tomasulo_tag_t;
+    rob_rd1_reg_tag : in tomasulo_tag_t;
     rob_rd1 : out value_or_tag_t;
     commit : in std_logic);
 end entity reorder_buffer;
@@ -87,12 +87,12 @@ begin
 
   rob_rd0 <=
     ('X', (others => 'X'), (others => 'X'))
-      when TO_01(rob_rd0_tag, 'X')(0) = 'X' else
-    rob_entries_val(to_integer(rob_rd0_tag));
+      when TO_01(rob_rd0_reg_tag, 'X')(0) = 'X' else
+    rob_entries_val(to_integer(rob_rd0_reg_tag));
   rob_rd1 <=
     ('X', (others => 'X'), (others => 'X'))
-      when TO_01(rob_rd1_tag, 'X')(0) = 'X' else
-    rob_entries_val(to_integer(rob_rd1_tag));
+      when TO_01(rob_rd1_reg_tag, 'X')(0) = 'X' else
+    rob_entries_val(to_integer(rob_rd1_reg_tag));
 
   sequential : process(clk, rst)
   begin

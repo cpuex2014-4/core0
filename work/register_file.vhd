@@ -33,19 +33,13 @@ architecture behavioral of register_file is
   signal reg : reg_t := (others =>
     ('1', x"00000000", (others => 'U')));
 begin
-  
+
   rd0 <= ('X', (others => 'X'), (others => 'X'))
          when TO_01(rd0_addr, 'X')(0) = 'X' else
-         snoop(reg(to_integer(rd0_addr)), cdb_in_available,
-               cdb_in_value, cdb_in_tag,
-               debug_out,
-               "reg(" & name_of_internal_register(rd0_addr) & ")");
+         reg(to_integer(rd0_addr));
   rd1 <= ('X', (others => 'X'), (others => 'X'))
          when TO_01(rd1_addr, 'X')(0) = 'X' else
-         snoop(reg(to_integer(rd1_addr)), cdb_in_available,
-               cdb_in_value, cdb_in_tag,
-               debug_out,
-               "reg(" & name_of_internal_register(rd1_addr) & ")");
+         reg(to_integer(rd1_addr));
   sequential : process(clk, rst)
   begin
     if rst = '1' then

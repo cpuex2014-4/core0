@@ -501,7 +501,7 @@ begin
     value_or_tag_select(
       decode_val_from_reg,
       dispatch_operand1_reg,
-      ('0', (others => '-'), rob_bottom));
+      value_or_tag_from_tag(rob_bottom));
 
   dispatch_branch <=
     ('X', (others => 'X'), (others => 'X'))
@@ -533,9 +533,9 @@ begin
     refetch => refetch,
     refetch_address => refetch_address,
     rob_bottom => rob_bottom,
-    rob_rd0_tag => dispatch_operand0_reg.tag,
+    rob_rd0_reg_tag => dispatch_operand0_reg.tag,
     rob_rd0 => dispatch_operand0_rob,
-    rob_rd1_tag => dispatch_operand1_reg.tag,
+    rob_rd1_reg_tag => dispatch_operand1_reg.tag,
     rob_rd1 => dispatch_operand1_rob,
     commit => any_commit);
 

@@ -79,9 +79,9 @@ package kakeudon is
       refetch : out std_logic;
       refetch_address : out unsigned(31 downto 0);
       rob_bottom : out tomasulo_tag_t;
-      rob_rd0_tag : in tomasulo_tag_t;
+      rob_rd0_reg_tag : in tomasulo_tag_t;
       rob_rd0 : out value_or_tag_t;
-      rob_rd1_tag : in tomasulo_tag_t;
+      rob_rd1_reg_tag : in tomasulo_tag_t;
       rob_rd1 : out value_or_tag_t;
       commit : in std_logic);
   end component reorder_buffer;
@@ -314,6 +314,7 @@ package kakeudon is
   constant ALU_OP_SRA  : alu_opcode_t := 2#1111#;
 
   function value_or_tag_from_value(value:unsigned_word) return value_or_tag_t;
+  function value_or_tag_from_tag(tag:tomasulo_tag_t) return value_or_tag_t;
   function value_or_tag_select(sel:std_logic;
     vt0:value_or_tag_t; vt1:value_or_tag_t) return value_or_tag_t;
   function value_or_tag_merge(vt:value_or_tag_t;
@@ -384,8 +385,13 @@ package body kakeudon is
   function value_or_tag_from_value(value:unsigned_word)
     return value_or_tag_t is
   begin
-    return ('1', value, (others => 'X'));
+    return ('1', value, (others => '-'));
   end function value_or_tag_from_value;
+  function value_or_tag_from_tag(tag:tomasulo_tag_t)
+    return value_or_tag_t is
+  begin
+    return ('0', (others => '-'), tag);
+  end function value_or_tag_from_tag;
   function value_or_tag_select(sel:std_logic;
     vt0:value_or_tag_t; vt1:value_or_tag_t) return value_or_tag_t is
   begin
@@ -439,10 +445,10 @@ package body kakeudon is
         end if;
       end loop;
     end if;
-    if cdb_source = cdb_size then
-      return vt;
+    if cdb_source < cdb_size then
+      return ('1', cdb_in_value(cdb_id_t(cdb_source)), vt.tag);
     else
-      return ('1', cdb_in_value(cdb_source), vt.tag);
+      return vt;
     end if;
   end function snoop;
 
@@ -459,7 +465,7 @@ package body kakeudon is
     elsif r = 0 then
       return "$zero";
     elsif r < 32 then
-      return gpr_name(to_integer(r));
+      return gpr_name(to_integer(r(4 downto 0)));
     elsif r < 64 then
       return "$f" & integer'image(to_integer(r-32));
     else
