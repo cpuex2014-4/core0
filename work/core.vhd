@@ -282,11 +282,21 @@ begin
         case d_opcode is
         when OP_SPECIAL =>
           case d_funct is
-          when FUNCT_SLL =>
+          when FUNCT_SLL | FUNCT_SRL | FUNCT_SRA =>
             next_decode_rob_type := rob_type_calc;
             next_unit_id := unit_alu;
-            next_unit_operation :=
-              to_unsigned(ALU_OP_SLL, unit_operation'length);
+            if d_funct = FUNCT_SLL then
+              next_unit_operation :=
+                to_unsigned(ALU_OP_SLL, unit_operation'length);
+            elsif d_funct = FUNCT_SRL then
+              next_unit_operation :=
+                to_unsigned(ALU_OP_SRL, unit_operation'length);
+            elsif d_funct = FUNCT_SRA then
+              next_unit_operation :=
+                to_unsigned(ALU_OP_SRA, unit_operation'length);
+            else
+              assert false severity failure;
+            end if;
             next_operand0_use_immediate := '1';
             next_operand0_immediate_val := d_zero_ext_sa;
             next_operand1_use_immediate := '0';
@@ -297,10 +307,54 @@ begin
             next_decode_branch_available := '1';
             next_decode_branch_value := program_counter_plus1 & "00";
             next_decoded_instruction_available := '1';
-          when FUNCT_OR =>
+          when FUNCT_SLLV | FUNCT_SRLV | FUNCT_SRAV |
+               FUNCT_ADD | FUNCT_ADDU | FUNCT_SUB | FUNCT_SUBU |
+               FUNCT_AND | FUNCT_OR | FUNCT_XOR | FUNCT_NOR |
+               FUNCT_SLT | FUNCT_SLTU =>
             next_decode_rob_type := rob_type_calc;
             next_unit_id := unit_alu;
-            next_unit_operation := to_unsigned(ALU_OP_OR, unit_operation'length);
+            if d_funct = FUNCT_SLLV then
+              next_unit_operation :=
+                to_unsigned(ALU_OP_SLL, unit_operation'length);
+            elsif d_funct = FUNCT_SRLV then
+              next_unit_operation :=
+                to_unsigned(ALU_OP_SRL, unit_operation'length);
+            elsif d_funct = FUNCT_SRAV then
+              next_unit_operation :=
+                to_unsigned(ALU_OP_SRA, unit_operation'length);
+            elsif d_funct = FUNCT_ADD then
+              next_unit_operation :=
+                to_unsigned(ALU_OP_ADD, unit_operation'length);
+            elsif d_funct = FUNCT_ADDU then
+              next_unit_operation :=
+                to_unsigned(ALU_OP_ADDU, unit_operation'length);
+            elsif d_funct = FUNCT_SUB then
+              next_unit_operation :=
+                to_unsigned(ALU_OP_SUB, unit_operation'length);
+            elsif d_funct = FUNCT_SUBU then
+              next_unit_operation :=
+                to_unsigned(ALU_OP_SUBU, unit_operation'length);
+            elsif d_funct = FUNCT_AND then
+              next_unit_operation :=
+                to_unsigned(ALU_OP_AND, unit_operation'length);
+            elsif d_funct = FUNCT_OR then
+              next_unit_operation :=
+                to_unsigned(ALU_OP_OR, unit_operation'length);
+            elsif d_funct = FUNCT_XOR then
+              next_unit_operation :=
+                to_unsigned(ALU_OP_XOR, unit_operation'length);
+            elsif d_funct = FUNCT_NOR then
+              next_unit_operation :=
+                to_unsigned(ALU_OP_NOR, unit_operation'length);
+            elsif d_funct = FUNCT_SLT then
+              next_unit_operation :=
+                to_unsigned(ALU_OP_SLT, unit_operation'length);
+            elsif d_funct = FUNCT_SLTU then
+              next_unit_operation :=
+                to_unsigned(ALU_OP_SLTU, unit_operation'length);
+            else
+              assert false severity failure;
+            end if;
             next_operand0_use_immediate := '0';
             next_operand0_addr := d_rs;
             next_operand0_immediate_val := (others => '-');
@@ -389,26 +443,34 @@ begin
           next_decode_branch_from_reg := '0';
           next_decode_branch_available := '0';
           next_decoded_instruction_available := '1';
-        when OP_ADDIU =>
+        when OP_ADDI | OP_ADDIU | OP_SLTI | OP_SLTIU |
+             OP_ANDI | OP_ORI | OP_XORI =>
           next_decode_rob_type := rob_type_calc;
           next_unit_id := unit_alu;
-          next_unit_operation :=
-            to_unsigned(ALU_OP_ADDU, unit_operation'length);
-          next_operand0_use_immediate := '0';
-          next_operand0_addr := d_rs;
-          next_operand1_use_immediate := '1';
-          next_operand1_immediate_val := d_sign_ext_imm;
-          next_destination_addr := d_rt;
-          next_decode_val_from_reg := '0';
-          next_decode_branch_from_reg := '0';
-          next_decode_branch_available := '1';
-          next_decode_branch_value := program_counter_plus1 & "00";
-          next_decoded_instruction_available := '1';
-        when OP_ANDI =>
-          next_decode_rob_type := rob_type_calc;
-          next_unit_id := unit_alu;
-          next_unit_operation :=
-            to_unsigned(ALU_OP_AND, unit_operation'length);
+          if d_opcode = OP_ADDI then
+            next_unit_operation :=
+              to_unsigned(ALU_OP_ADD, unit_operation'length);
+          elsif d_opcode = OP_ADDIU then
+            next_unit_operation :=
+              to_unsigned(ALU_OP_ADDU, unit_operation'length);
+          elsif d_opcode = OP_SLTI then
+            next_unit_operation :=
+              to_unsigned(ALU_OP_SLT, unit_operation'length);
+          elsif d_opcode = OP_SLTIU then
+            next_unit_operation :=
+              to_unsigned(ALU_OP_SLTU, unit_operation'length);
+          elsif d_opcode = OP_ANDI then
+            next_unit_operation :=
+              to_unsigned(ALU_OP_AND, unit_operation'length);
+          elsif d_opcode = OP_ORI then
+            next_unit_operation :=
+              to_unsigned(ALU_OP_OR, unit_operation'length);
+          elsif d_opcode = OP_XORI then
+            next_unit_operation :=
+              to_unsigned(ALU_OP_XOR, unit_operation'length);
+          else
+            assert false severity failure;
+          end if;
           next_operand0_use_immediate := '0';
           next_operand0_addr := d_rs;
           next_operand1_use_immediate := '1';
