@@ -23,6 +23,7 @@ entity register_file is
     wr0_tag : in tomasulo_tag_t;
     wr1_addr : in internal_register_t;
     wr1_enable : in std_logic;
+    wr1_tag : in tomasulo_tag_t;
     wr1_value : in unsigned_word);
 end entity register_file;
 
@@ -78,13 +79,15 @@ begin
           assert TO_01(wr1_value, 'X')(0) /= 'X'
             report "metavalue detected in wr1_value"
               severity failure;
+          assert not debug_out
+            report name_of_internal_register(wr1_addr) &
+                   " <- " & hex_of_word(wr1_value)
+              severity note;
+          reg(to_integer(wr1_addr)).value <= wr1_value;
           if not (wr0_enable = '1' and wr0_addr = wr1_addr) then
-            assert not debug_out
-              report name_of_internal_register(wr1_addr) &
-                     " <- " & hex_of_word(wr1_value)
-                severity note;
-            reg(to_integer(wr1_addr)) <=
-              ('1', wr1_value, (others => '-'));
+            if reg(to_integer(wr1_addr)).tag = wr1_tag then
+              reg(to_integer(wr1_addr)).available <= '1';
+            end if;
           end if;
         end if;
       end if;

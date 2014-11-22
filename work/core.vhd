@@ -615,6 +615,7 @@ begin
     wr0_tag => rob_bottom,
     wr1_addr => rob_top_dest,
     wr1_enable => rob_top_committable,
+    wr1_tag => rob_top,
     wr1_value => rob_top_val.value);
 
   mem_dispatch <=

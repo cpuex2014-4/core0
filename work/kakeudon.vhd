@@ -173,6 +173,7 @@ package kakeudon is
       wr0_tag : in tomasulo_tag_t;
       wr1_addr : in internal_register_t;
       wr1_enable : in std_logic;
+      wr1_tag : in tomasulo_tag_t;
       wr1_value : in unsigned_word);
   end component register_file;
 

@@ -100,20 +100,14 @@ begin
   XWA <= not (isstore and enable);
   sequential: process(clk)
     variable next_rs232c_recv_consume : std_logic;
+    variable next_rs232c_send_push : std_logic;
+    variable next_rs232c_send_bottom : unsigned(7 downto 0);
+    variable next_isstore_delay1 : std_logic;
   begin
     if rising_edge(clk) then
       next_rs232c_recv_consume := '0';
-
-      enable_delay1 <= enable;
-      enable_delay2 <= enable_delay1;
-      enable_delay3 <= enable_delay2;
-      tag_delay1 <= tag;
-      tag_delay2 <= tag_delay1;
-      tag_delay3 <= tag_delay2;
-      isstore_delay1 <= isstore;
-      isstore_delay2 <= isstore_delay1;
-      data_write_delay1 <= data_write;
-      data_write_delay2 <= data_write_delay1;
+      next_rs232c_send_push := '0';
+      next_rs232c_send_bottom := (others => '-');
 
       if enable = '1' then
         if isstore = '0' then
@@ -133,6 +127,12 @@ begin
             read_data_from_sram_delay1 <= '0';
             next_rs232c_recv_consume := not rs232c_recv_empty;
             non_sram_data_delay1 <= (31 downto 8 => '0') & rs232c_recv_top;
+          elsif addr & "00" = x"FFFF0008" then
+            read_data_from_sram_delay1 <= '0';
+            non_sram_data_delay1 <=
+              (31 downto 2 => '0',
+               1 => '0',
+               0 => not rs232c_send_full);
           else
             read_data_from_sram_delay1 <= '-';
             non_sram_data_delay1 <= (others => '-');
@@ -145,10 +145,31 @@ begin
             report "Memory[" & hex_of_word(addr&"00") & "] <- " &
               hex_of_word(data_write)
                 severity note;
+          if addr(29 downto 20) = "0000000000" then
+            next_isstore_delay1 := isstore;
+          elsif addr & "00" = x"FFFF000C" then
+            next_isstore_delay1 := '0';
+            next_rs232c_send_push := not rs232c_send_full;
+            next_rs232c_send_bottom := data_write(7 downto 0);
+          else
+            next_isstore_delay1 := '0';
+          end if;
           read_data_from_sram_delay1 <= '-';
           non_sram_data_delay1 <= (others => '-');
         end if;
       end if;
+
+      enable_delay1 <= enable;
+      enable_delay2 <= enable_delay1;
+      enable_delay3 <= enable_delay2;
+      tag_delay1 <= tag;
+      tag_delay2 <= tag_delay1;
+      tag_delay3 <= tag_delay2;
+      isstore_delay1 <= next_isstore_delay1;
+      isstore_delay2 <= isstore_delay1;
+      data_write_delay1 <= data_write;
+      data_write_delay2 <= data_write_delay1;
+
       read_data_from_sram_delay2 <= read_data_from_sram_delay1;
       read_data_from_sram_delay3 <= read_data_from_sram_delay2;
       non_sram_data_delay2 <= non_sram_data_delay1;
@@ -192,6 +213,8 @@ begin
       end if;
 
       rs232c_recv_consume <= next_rs232c_recv_consume;
+      rs232c_send_push <= next_rs232c_send_push;
+      rs232c_send_bottom <= next_rs232c_send_bottom;
     end if;
   end process sequential;
   inst_data <=
