@@ -49,11 +49,6 @@ architecture behavioral of load_store_buffer is
   signal stage1_entries_operand0 : stage1_entries_operand_t;
   signal stage1_entries_operand2 : stage1_entries_word_t;
 
-  signal stage2_dispatch : std_logic := '0';
-  signal stage2_dispatch_isstore : std_logic;
-  signal stage2_dispatch_tag : tomasulo_tag_t;
-  signal stage2_dispatch_operand0 : unsigned_word;
-
   type stage2_entries_tag_t is
     array(0 to num_stage2_entries-1) of tomasulo_tag_t;
   type stage2_entries_word_t is
@@ -93,6 +88,12 @@ begin
 
     variable next_stage1_entries_operand0 : stage1_entries_operand_t;
 
+    variable stage2_dispatch : std_logic := '0';
+    variable stage2_dispatch_isstore : std_logic;
+    variable stage2_dispatch_tag : tomasulo_tag_t;
+    variable stage2_dispatch_operand0 : unsigned_word;
+
+
     variable stage2_entries_issuable :
       std_logic_vector(0 to num_stage2_entries-1);
     variable stage2_entries_issuable_accum :
@@ -109,11 +110,6 @@ begin
       stage1_entries_isstore <= (others => '-');
       stage1_entries_operand0 <=
         (others => ('-', (others => '-'), (others => '-')));
-
-      stage2_dispatch <= '0';
-      stage2_dispatch_isstore <= '-';
-      stage2_dispatch_tag <= (others => '-');
-      stage2_dispatch_operand0 <= (others => '-');
 
       stage1_entries_operand2 <= (others => (others => '-'));
       stage2_entries_busy <= (others => '0');
@@ -132,15 +128,15 @@ begin
         not stage2_entries_busy(num_stage2_entries-1);
 
       if refetch = '1' then
-        stage2_dispatch <= '0';
-        stage2_dispatch_isstore <= '-';
-        stage2_dispatch_tag <= (others => '-');
-        stage2_dispatch_operand0 <= (others => '-');
+        stage2_dispatch := '0';
+        stage2_dispatch_isstore := '-';
+        stage2_dispatch_tag := (others => '-');
+        stage2_dispatch_operand0 := (others => '-');
       else
-        stage2_dispatch <= stage1_entries_issuable;
-        stage2_dispatch_isstore <= stage1_entries_isstore(0);
-        stage2_dispatch_tag <= stage1_entries_tag(0);
-        stage2_dispatch_operand0 <=
+        stage2_dispatch := stage1_entries_issuable;
+        stage2_dispatch_isstore := stage1_entries_isstore(0);
+        stage2_dispatch_tag := stage1_entries_tag(0);
+        stage2_dispatch_operand0 :=
           stage1_entries_operand0(0).value +
           stage1_entries_operand2(0);
         -- issue
@@ -258,7 +254,8 @@ begin
                  integer'image(i) & ")"
             severity failure;
       end loop;
-      assert stage2_entries_busy(num_stage2_entries-1) = '0' or dispatch = '0'
+      assert stage2_entries_busy(num_stage2_entries-1) = '0' or
+             stage2_dispatch = '0'
         report "LSBuffer Stage 2: " &
                "invalid business condition in LS stage2_entries"
           severity failure;
