@@ -61,16 +61,12 @@ architecture behavioral of memory_controller is
 
   signal non_sram_data_delay1 : unsigned(31 downto 0);
   signal non_sram_data_delay2 : unsigned(31 downto 0);
-  signal non_sram_data_delay3 : unsigned(31 downto 0);
   signal read_data_from_sram_delay1 : std_logic;
   signal read_data_from_sram_delay2 : std_logic;
-  signal read_data_from_sram_delay3 : std_logic;
-  signal enable_delay1 : std_logic := '0';
-  signal enable_delay2 : std_logic := '0';
-  signal enable_delay3 : std_logic := '0';
+  signal read_enable_delay1 : std_logic := '0';
+  signal read_enable_delay2 : std_logic := '0';
   signal tag_delay1 : tomasulo_tag_t;
   signal tag_delay2 : tomasulo_tag_t;
-  signal tag_delay3 : tomasulo_tag_t;
   signal isstore_delay1 : std_logic;
   signal isstore_delay2 : std_logic;
   signal data_write_delay1 : unsigned(31 downto 0);
@@ -91,12 +87,12 @@ begin
   ZDP <= (others => 'Z') when isstore_delay2 /= '1' else (others => '0');
   ZD <= (others => 'Z') when isstore_delay2 /= '1' else
         std_logic_vector(data_write_delay2);
-  avail_read <= enable_delay3;
+  avail_read <= read_enable_delay2;
   data_read <=
-    (others => 'X') when TO_X01(read_data_from_sram_delay3) = 'X' else
-    unsigned(ZD) when read_data_from_sram_delay3 = '1' else
-    non_sram_data_delay3;
-  tag_read <= tag_delay3;
+    (others => 'X') when TO_X01(read_data_from_sram_delay2) = 'X' else
+    unsigned(ZD) when read_data_from_sram_delay2 = '1' else
+    non_sram_data_delay2;
+  tag_read <= tag_delay2;
   XWA <= not (isstore and enable);
   sequential: process(clk)
     variable next_rs232c_recv_consume : std_logic;
@@ -108,11 +104,12 @@ begin
       next_rs232c_recv_consume := '0';
       next_rs232c_send_push := '0';
       next_rs232c_send_bottom := (others => '-');
+      next_isstore_delay1 := '0';
 
       if enable = '1' then
         if isstore = '0' then
           if TO_01(addr,'X')(0) = 'X' then
-            read_data_from_sram_delay1 <= '-';
+            read_data_from_sram_delay1 <= 'X';
             non_sram_data_delay1 <= (others => '-');
           elsif addr(29 downto 20) = "0000000000" then
             read_data_from_sram_delay1 <= '1';
@@ -146,34 +143,27 @@ begin
               hex_of_word(data_write)
                 severity note;
           if addr(29 downto 20) = "0000000000" then
-            next_isstore_delay1 := isstore;
+            next_isstore_delay1 := '1';
           elsif addr & "00" = x"FFFF000C" then
-            next_isstore_delay1 := '0';
             next_rs232c_send_push := not rs232c_send_full;
             next_rs232c_send_bottom := data_write(7 downto 0);
-          else
-            next_isstore_delay1 := '0';
           end if;
           read_data_from_sram_delay1 <= '-';
           non_sram_data_delay1 <= (others => '-');
         end if;
       end if;
 
-      enable_delay1 <= enable;
-      enable_delay2 <= enable_delay1;
-      enable_delay3 <= enable_delay2;
+      read_enable_delay1 <= not isstore and enable;
+      read_enable_delay2 <= read_enable_delay1;
       tag_delay1 <= tag;
       tag_delay2 <= tag_delay1;
-      tag_delay3 <= tag_delay2;
       isstore_delay1 <= next_isstore_delay1;
       isstore_delay2 <= isstore_delay1;
       data_write_delay1 <= data_write;
       data_write_delay2 <= data_write_delay1;
 
       read_data_from_sram_delay2 <= read_data_from_sram_delay1;
-      read_data_from_sram_delay3 <= read_data_from_sram_delay2;
       non_sram_data_delay2 <= non_sram_data_delay1;
-      non_sram_data_delay3 <= non_sram_data_delay2;
 
       if (isstore and enable) = '1' then
         assert TO_01(addr,'X')(0) /= 'X'

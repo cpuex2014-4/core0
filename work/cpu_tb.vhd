@@ -117,6 +117,7 @@ begin
     XLBO => XLBO);
 
   sram_unit0 : GS8160Z18
+  -- generic map (report_read=>true, report_write=>true)
   port map (
     A => ZA,
     CK => ZCLKMA(0),
@@ -138,6 +139,7 @@ begin
     XLBO => XLBO);
 
   sram_unit1 : GS8160Z18
+  -- generic map (report_read=>true, report_write=>true)
   port map (
     A => ZA,
     CK => ZCLKMA(1),
