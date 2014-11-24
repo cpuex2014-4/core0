@@ -144,7 +144,8 @@ begin
                 "dest = " & name_of_internal_register(dispatch_dest) & ", " &
                 "val = " & str_of_value_or_tag(dispatch_rob_val) & ", " &
                 "branch = " & str_of_value_or_tag(dispatch_branch) & ", " &
-                "predict = " & hex_of_word(dispatch_predicted_branch) & ")";
+                "predict = " & hex_of_word(dispatch_predicted_branch) & ")"
+              severity note;
 
           rob_end <= rob_end + 1;
         end if;
