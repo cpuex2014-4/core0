@@ -44,6 +44,8 @@ architecture behavioral of core is
   -- instruction fetch
   signal program_counter_plus1 : unsigned(29 downto 0);
   signal instruction_register : unsigned(31 downto 0);
+  signal instruction_register_old : unsigned(31 downto 0);
+  signal instruction_fetch_stalled : std_logic;
   signal instruction_predicted_branch : unsigned(29 downto 0);
   signal instruction_register_available : std_logic := '0';
 
@@ -123,7 +125,10 @@ architecture behavioral of core is
   signal any_commit: std_logic;
 begin
   mem_inst_addr <= program_counter;
-  instruction_register <= mem_inst_data;
+  instruction_register <=
+    (others => 'X') when TO_X01(instruction_fetch_stalled) = 'X' else
+    mem_inst_data when instruction_fetch_stalled = '0' else
+    instruction_register_old;
 
   instruction_fetch_sequential : process(clk, rst)
   begin
@@ -150,6 +155,7 @@ begin
         program_counter_plus1 <= (others => '-');
         instruction_predicted_branch <= (others => '-');
         instruction_register_available <= '0';
+        instruction_fetch_stalled <= '-';
       elsif instruction_fetch_stall /= '1' then
         assert TO_01(program_counter, 'X')(0) /= 'X'
           report "metavalue detected in program_counter"
@@ -161,7 +167,11 @@ begin
         program_counter_plus1 <= program_counter + 1;
         instruction_predicted_branch <= program_counter + 1;
         instruction_register_available <= '1';
+        instruction_fetch_stalled <= '0';
+      else
+        instruction_fetch_stalled <= '1';
       end if;
+      instruction_register_old <= instruction_register;
     end if;
   end process instruction_fetch_sequential;
 
