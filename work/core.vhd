@@ -729,9 +729,18 @@ begin
     end if;
   end process send_data_to_memory;
 
-  cdb_available(1) <= mem_avail_read;
-  cdb_value(1) <= mem_data_read;
-  cdb_tag(1) <= mem_tag_read;
+  recv_data_from_memory: process(clk, rst)
+  begin
+    if rst = '1' then
+      cdb_available(1) <= '0';
+      cdb_value(1) <= (others => '-');
+      cdb_tag(1) <= (others => '-');
+    elsif rising_edge(clk) then
+      cdb_available(1) <= mem_avail_read;
+      cdb_value(1) <= mem_data_read;
+      cdb_tag(1) <= mem_tag_read;
+    end if;
+  end process recv_data_from_memory;
 
   branch_dispatch <=
     branch_dispatchable when
