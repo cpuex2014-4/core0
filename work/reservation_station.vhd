@@ -205,18 +205,24 @@ begin
       end loop;
       entries_issuable_any := entries_issuable_accum(num_entries-1);
       for i in num_entries-1 downto 0 loop
-        if i = num_entries-1 or entries_issuable(i) = '1' then
+        if entries_issuable(i) = '1' then
           entries_issue_tag(i) := entries_tag(i);
           entries_issue_opcode(i) := entries_opcode(i);
           for opid in 0 to num_operands-1 loop
             entries_issue_operands(i)(opid) := entries_operands(i)(opid).value;
           end loop;
+        elsif i = num_entries-1 then
+          entries_issue_tag(i) := (others => '-');
+          entries_issue_opcode(i) := (others => '-');
+          for opid in 0 to num_operands-1 loop
+            entries_issue_operands(i)(opid) := (others => '-');
+          end loop;
         else
-          entries_issue_tag(i) := entries_tag(i+1);
-          entries_issue_opcode(i) := entries_opcode(i+1);
+          entries_issue_tag(i) := entries_issue_tag(i+1);
+          entries_issue_opcode(i) := entries_issue_opcode(i+1);
           for opid in 0 to num_operands-1 loop
             entries_issue_operands(i)(opid) :=
-              entries_operands(i+1)(opid).value;
+              entries_issue_operands(i+1)(opid);
           end loop;
         end if;
       end loop;

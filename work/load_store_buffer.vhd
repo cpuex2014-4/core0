@@ -295,10 +295,15 @@ begin
           stage2_entries_issue_tag(i) := stage2_entries_tag(i);
           stage2_entries_issue_isstore(i) := stage2_entries_isstore(i);
           stage2_entries_issue_operand0(i) := stage2_entries_operand0(i);
+        elsif i = num_stage2_entries-1 then
+          stage2_entries_issue_tag(i) := (others => '-');
+          stage2_entries_issue_isstore(i) := '-';
+          stage2_entries_issue_operand0(i) := (others => '-');
         else
-          stage2_entries_issue_tag(i) := stage2_entries_tag(i+1);
-          stage2_entries_issue_isstore(i) := stage2_entries_isstore(i+1);
-          stage2_entries_issue_operand0(i) := stage2_entries_operand0(i+1);
+          stage2_entries_issue_tag(i) := stage2_entries_issue_tag(i+1);
+          stage2_entries_issue_isstore(i) := stage2_entries_issue_isstore(i+1);
+          stage2_entries_issue_operand0(i) :=
+            stage2_entries_issue_operand0(i+1);
         end if;
       end loop;
 
