@@ -7,6 +7,9 @@ use work.serial.all;
 use work.kakeudon.all;
 
 entity cpu is
+  generic (
+    rs_baudrate : real;
+    rs_stopbit : real);
   port (
     -- SRAM
     ZD : inout std_logic_vector(31 downto 0); -- SRAM Data
@@ -104,6 +107,9 @@ begin
     rs232c_send_push => rs232c_send_push);
 
   rs232c_unit : io_rs232c
+  generic map (
+    baudrate => rs_baudrate,
+    stopbit => rs_stopbit)
   port map (
     clk => clk,
     rst => rst,

@@ -7,6 +7,9 @@ use work.serial.all;
 use work.kakeudon.all;
 
 entity io_rs232c is
+  generic (
+    baudrate : real;
+    stopbit : real);
   port (
     clk : in std_logic;
     rst : in std_logic;
@@ -101,8 +104,8 @@ begin
   uart : rs232c
   generic map (
     clk_freq => clk_freq,
-    baudrate => 460800.0,
-    stopbit => 1.0,
+    baudrate => baudrate,
+    stopbit => stopbit,
     databit => 8,
     parity => parity_none,
     handshaking => handshaking_none)

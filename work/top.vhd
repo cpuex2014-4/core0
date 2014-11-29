@@ -85,6 +85,9 @@ architecture toplevel of top is
   signal rst : std_logic;
 begin
   cpu_unit: cpu
+  generic map (
+    rs_baudrate => 460800.0,
+    rs_stopbit => 1.0)
   port map (
     ZD => ZD,
     ZDP => ZDP,

@@ -133,6 +133,9 @@ package kakeudon is
       rst : in std_logic);
   end component core;
   component cpu is
+    generic (
+      rs_baudrate : real;
+      rs_stopbit : real);
     port (
       -- SRAM
       ZD : inout std_logic_vector(31 downto 0); -- SRAM Data
@@ -217,6 +220,9 @@ package kakeudon is
   end component memory_controller;
 
   component io_rs232c is
+    generic (
+      baudrate : real;
+      stopbit : real);
     port (
       clk : in std_logic;
       rst : in std_logic;

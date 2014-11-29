@@ -12,6 +12,8 @@ end entity cpu_tb;
 
 architecture behavioral of cpu_tb is
   constant clk_freq : real := 66.666e6;
+  constant test_baudrate : real := 1000000.0;
+  constant test_stopbit : real := 1.0;
   signal simclk : std_logic;
   signal txd : std_logic := '1';
   signal rxd : std_logic := '1';
@@ -78,8 +80,8 @@ begin
   rdwr : rs232c
   generic map (
     clk_freq => clk_freq,
-    baudrate => 460800.0,
-    stopbit => 1.0,
+    baudrate => test_baudrate,
+    stopbit => test_stopbit,
     databit => 8,
     parity => parity_none,
     handshaking => handshaking_none)
@@ -95,6 +97,9 @@ begin
     recv_data => recv_data);
 
   cpu_unit : cpu
+  generic map (
+    rs_baudrate => test_baudrate,
+    rs_stopbit => test_stopbit)
   port map (
     clk => simclk,
     RS_TX => txd,
