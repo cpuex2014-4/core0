@@ -52,7 +52,7 @@ architecture behavioral of core is
   signal instruction_fetch_stall : std_logic := '0';
 
   -- instruction decode
-  type unit_id_t is (unit_mem, unit_branch, unit_alu, unit_fadd);
+  type unit_id_t is (unit_none, unit_mem, unit_branch, unit_alu, unit_fadd);
   signal decode_rob_type : rob_type_t;
   signal unit_id : unit_id_t;
   signal unit_operation : unsigned(3 downto 0);
@@ -66,6 +66,7 @@ architecture behavioral of core is
   signal operand3_immediate_val : unsigned(31 downto 0);
   signal destination_addr : internal_register_t;
   signal decode_val_from_reg : std_logic;
+  signal decode_val_from_reg_select : std_logic;
   signal decode_branch_from_reg : std_logic;
   signal decode_branch_available : std_logic;
   signal decode_branch_value : unsigned(31 downto 0);
@@ -87,6 +88,7 @@ architecture behavioral of core is
   signal dispatch_branch : value_or_tag_t;
   signal wr0_enable : std_logic;
 
+  signal none_dispatch : std_logic;
   signal any_dispatch : std_logic;
 
   signal mem_dispatchable : std_logic := '0';
@@ -209,6 +211,7 @@ begin
     variable next_operand3_immediate_val : unsigned(31 downto 0);
     variable next_destination_addr : internal_register_t;
     variable next_decode_val_from_reg : std_logic;
+    variable next_decode_val_from_reg_select : std_logic;
     variable next_decode_branch_from_reg : std_logic;
     variable next_decode_branch_available : std_logic;
     variable next_decode_branch_value : unsigned(31 downto 0);
@@ -216,7 +219,7 @@ begin
   begin
     if rst = '1' then
       decode_rob_type <= rob_type_calc; -- don't care
-      unit_id <= unit_alu; -- don't care
+      unit_id <= unit_none; -- don't care
       unit_operation <= (others => '-');
       operand0_use_immediate <= '-';
       operand0_addr <= (others => '-');
@@ -228,6 +231,7 @@ begin
       operand3_immediate_val <= (others => '-');
       destination_addr <= (others => '0');
       decode_val_from_reg <= '-';
+      decode_val_from_reg_select <= '-';
       decode_branch_from_reg <= '-';
       decode_branch_available <= '-';
       decode_branch_value <= (others => '-');
@@ -236,7 +240,7 @@ begin
     elsif rising_edge(clk) then
       if refetch = '1' then
         decode_rob_type <= rob_type_calc; -- don't care
-        unit_id <= unit_alu; -- don't care
+        unit_id <= unit_none; -- don't care
         unit_operation <= (others => '-');
         operand0_use_immediate <= '-';
         operand0_addr <= (others => '-');
@@ -248,6 +252,7 @@ begin
         operand3_immediate_val <= (others => '-');
         destination_addr <= (others => '0');
         decode_val_from_reg <= '-';
+        decode_val_from_reg_select <= '-';
         decode_branch_from_reg <= '-';
         decode_branch_available <= '-';
         decode_branch_value <= (others => '-');
@@ -255,7 +260,7 @@ begin
         decoded_instruction_available <= '0';
       elsif instruction_register_available = '1' and decode_stall /= '1' then
         next_decode_rob_type := rob_type_calc; -- don't care
-        next_unit_id := unit_alu; -- don't care
+        next_unit_id := unit_none; -- don't care
         next_unit_operation := (others => '-');
         next_operand0_use_immediate := '-';
         next_operand0_addr := (others => '-');
@@ -267,6 +272,7 @@ begin
         next_operand3_immediate_val := (others => '-');
         next_destination_addr := (others => '-');
         next_decode_val_from_reg := '-';
+        next_decode_val_from_reg_select := '-';
         next_decode_branch_from_reg := '-';
         next_decode_branch_available := '-';
         next_decode_branch_value := (others => '-');
@@ -377,17 +383,22 @@ begin
             next_decode_branch_available := '1';
             next_decode_branch_value := program_counter_plus1 & "00";
             next_decoded_instruction_available := '1';
-          when FUNCT_JR =>
+          when FUNCT_JR | FUNCT_JALR =>
             next_decode_rob_type := rob_type_calc;
-            next_unit_id := unit_alu;
-            next_unit_operation :=
-              to_unsigned(ALU_OP_ADDU, unit_operation'length);
+            next_unit_id := unit_none;
             next_operand0_use_immediate := '0';
             next_operand0_addr := d_rs;
-            next_operand1_use_immediate := '0';
-            next_operand1_addr := d_rt;
-            next_destination_addr := d_zero;
-            next_decode_val_from_reg := '0';
+            next_operand1_use_immediate := '1';
+            next_operand1_immediate_val := program_counter_plus1 & "00";
+            if d_funct = FUNCT_JR then
+              next_destination_addr := d_zero;
+            elsif d_funct = FUNCT_JALR then
+              next_destination_addr := d_rd;
+            else
+              assert false severity failure;
+            end if;
+            next_decode_val_from_reg := '1';
+            next_decode_val_from_reg_select := '1';
             next_decode_branch_from_reg := '1';
             next_decode_branch_available := '0';
             next_decoded_instruction_available := '1';
@@ -397,11 +408,9 @@ begin
           end case;
         when OP_J | OP_JAL =>
           next_decode_rob_type := rob_type_calc;
-          next_unit_id := unit_alu;
+          next_unit_id := unit_none;
           next_unit_operation :=
             to_unsigned(ALU_OP_ADDU, unit_operation'length);
-          next_operand0_use_immediate := '0';
-          next_operand0_addr := d_zero;
           next_operand1_use_immediate := '1';
           next_operand1_immediate_val := program_counter_plus1 & "00";
           if d_opcode = OP_J then
@@ -411,7 +420,8 @@ begin
           else
             assert false severity failure;
           end if;
-          next_decode_val_from_reg := '0';
+          next_decode_val_from_reg := '1';
+          next_decode_val_from_reg_select := '1';
           next_decode_branch_from_reg := '0';
           next_decode_branch_available := '1';
           next_decode_branch_value :=
@@ -524,6 +534,7 @@ begin
           next_operand2_immediate_val := d_sign_ext_imm;
           next_destination_addr := d_zero;
           next_decode_val_from_reg := '1';
+          next_decode_val_from_reg_select := '1';
           next_decode_branch_from_reg := '0';
           next_decode_branch_available := '1';
           next_decode_branch_value := program_counter_plus1 & "00";
@@ -545,6 +556,7 @@ begin
         operand3_immediate_val <= next_operand3_immediate_val;
         destination_addr <= next_destination_addr;
         decode_val_from_reg <= next_decode_val_from_reg;
+        decode_val_from_reg_select <= next_decode_val_from_reg_select;
         decode_branch_from_reg <= next_decode_branch_from_reg;
         decode_branch_available <= next_decode_branch_available;
         decode_branch_value <= next_decode_branch_value;
@@ -552,7 +564,7 @@ begin
         decoded_instruction_available <= next_decoded_instruction_available;
       elsif decode_stall /= '1' then
         decode_rob_type <= rob_type_calc; -- don't care
-        unit_id <= unit_alu; -- don't care
+        unit_id <= unit_none; -- don't care
         unit_operation <= (others => '-');
         operand0_use_immediate <= '-';
         operand0_addr <= (others => '-');
@@ -564,6 +576,7 @@ begin
         operand3_immediate_val <= (others => '-');
         destination_addr <= (others => '0');
         decode_val_from_reg <= '-';
+        decode_val_from_reg_select <= '-';
         decode_branch_from_reg <= '-';
         decode_branch_available <= '-';
         decode_branch_value <= (others => '-');
@@ -579,7 +592,11 @@ begin
   dispatch_rob_val <=
     value_or_tag_select(
       decode_val_from_reg,
-      dispatch_operand1_reg,
+      value_or_tag_select(
+        decode_val_from_reg_select,
+        dispatch_operand1,
+        dispatch_operand0
+      ),
       value_or_tag_from_tag(rob_bottom));
 
   dispatch_branch <=
@@ -647,7 +664,11 @@ begin
     value_or_tag_from_value(dispatch_operand3)
   );
 
-  any_dispatch <= mem_dispatch or branch_dispatch or alu_dispatch;
+  none_dispatch <=
+    decoded_instruction_available when unit_id = unit_none else '0';
+
+  any_dispatch <=
+    none_dispatch or mem_dispatch or branch_dispatch or alu_dispatch;
 
   dispatch_sequential : process(clk, rst)
   begin
