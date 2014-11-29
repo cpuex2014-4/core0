@@ -395,7 +395,7 @@ begin
             report "unknown SPECIAL funct " & bin_of_int(d_funct,6)
               severity failure;
           end case;
-        when OP_J =>
+        when OP_J | OP_JAL =>
           next_decode_rob_type := rob_type_calc;
           next_unit_id := unit_alu;
           next_unit_operation :=
@@ -404,24 +404,13 @@ begin
           next_operand0_addr := d_zero;
           next_operand1_use_immediate := '1';
           next_operand1_immediate_val := program_counter_plus1 & "00";
-          next_destination_addr := d_zero;
-          next_decode_val_from_reg := '0';
-          next_decode_branch_from_reg := '0';
-          next_decode_branch_available := '1';
-          next_decode_branch_value :=
-            program_counter_plus1(29 downto 26) &
-            instruction_register(25 downto 0) & "00";
-          next_decoded_instruction_available := '1';
-        when OP_JAL =>
-          next_decode_rob_type := rob_type_calc;
-          next_unit_id := unit_alu;
-          next_unit_operation :=
-            to_unsigned(ALU_OP_ADDU, unit_operation'length);
-          next_operand0_use_immediate := '0';
-          next_operand0_addr := d_zero;
-          next_operand1_use_immediate := '1';
-          next_operand1_immediate_val := program_counter_plus1 & "00";
-          next_destination_addr := d_ra;
+          if d_opcode = OP_J then
+            next_destination_addr := d_zero;
+          elsif d_opcode = OP_JAL then
+            next_destination_addr := d_ra;
+          else
+            assert false severity failure;
+          end if;
           next_decode_val_from_reg := '0';
           next_decode_branch_from_reg := '0';
           next_decode_branch_available := '1';
