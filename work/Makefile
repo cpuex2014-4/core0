@@ -9,7 +9,7 @@ CORE_SOURCES = \
 	serial.vhd kakeudon.vhd memory_controller.vhd register_file.vhd \
 	reservation_station.vhd reorder_buffer.vhd \
 	load_store_buffer.vhd \
-	fp_adder.vhd \
+	fp_adder.vhd fp_multiplier.vhd fp_comparator.vhd \
 	alu.vhd io_rs232c.vhd core.vhd cpu.vhd \
 	sramsim.vhd cpu_tb.vhd
 SOURCES = $(FPU_SOURCES:%=../fpu/VHDL/%) $(CORE_SOURCES)
@@ -26,7 +26,7 @@ GHDLFLAGS = \
 	-fexplicit --ieee=synopsys --work=$(LIBRARYNAME) \
 	--mb-comments \
 	#--std=93
-GHDL_SIM_OPT = --stop-time=20ms
+GHDL_SIM_OPT = --stop-time=500ms
 
 .PHONY: all test clean check-syntax $(TESTBENCHES)
 

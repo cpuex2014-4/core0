@@ -4,7 +4,7 @@ use ieee.numeric_std.all;
 
 library work;
 use work.serial.all;
-use work.kakeudon_fpu.all;
+-- use work.kakeudon_fpu.all;
 use work.kakeudon.all;
 
 entity core is
@@ -52,7 +52,9 @@ architecture behavioral of core is
   signal instruction_fetch_stall : std_logic := '0';
 
   -- instruction decode
-  type unit_id_t is (unit_none, unit_mem, unit_branch, unit_alu, unit_fadd);
+  type unit_id_t is
+    (unit_none, unit_mem, unit_branch, unit_alu,
+     unit_fadd, unit_fmul, unit_fcmp);
   signal decode_rob_type : rob_type_t;
   signal unit_id : unit_id_t;
   signal unit_operation : unsigned(3 downto 0);
@@ -117,6 +119,20 @@ architecture behavioral of core is
   signal fadd_issue : std_logic;
   signal fadd_opcode : unsigned(1 downto 0);
   signal fadd_operands : unsigned_word_array_t(0 to 1);
+
+  signal fmul_dispatchable : std_logic;
+  signal fmul_dispatch : std_logic := '0';
+  signal fmul_available : std_logic;
+  signal fmul_issue : std_logic;
+  signal fmul_opcode : unsigned(1 downto 0);
+  signal fmul_operands : unsigned_word_array_t(0 to 1);
+
+  signal fcmp_dispatchable : std_logic;
+  signal fcmp_dispatch : std_logic := '0';
+  signal fcmp_available : std_logic;
+  signal fcmp_issue : std_logic;
+  signal fcmp_opcode : unsigned(3 downto 0);
+  signal fcmp_operands : unsigned_word_array_t(0 to 1);
 
   -- reorder buffer
   signal rob_top_committable : std_logic;
@@ -193,6 +209,7 @@ begin
     variable d_funct : funct_t;
     constant d_zero : internal_register_t := "0000000";
     constant d_ra : internal_register_t := "0011111";
+    constant d_cc0 : internal_register_t := "1000000";
     variable d_rs : internal_register_t;
     variable d_rt : internal_register_t;
     variable d_rd : internal_register_t;
@@ -541,12 +558,42 @@ begin
             next_decode_branch_value := program_counter_plus1 & "00";
             next_decoded_instruction_available := '1';
           when COP1_FMT_BC =>
-            report "unimplemented: BC1F/BC1T" severity failure;
+            next_decode_rob_type := rob_type_calc;
+            next_unit_id := unit_branch;
+            if instruction_register(20 downto 16) = "00000" then
+              next_unit_operation :=
+                to_unsigned(0, unit_operation'length);
+            elsif instruction_register(20 downto 16) = "00001" then
+              next_unit_operation :=
+                to_unsigned(1, unit_operation'length);
+            else
+              report "BC1: unknown condition code" severity failure;
+            end if;
+            next_operand0_use_immediate := '0';
+            next_operand0_addr := d_cc0;
+            next_operand1_use_immediate := '0';
+            next_operand1_addr := d_zero;
+            next_operand2_immediate_val :=
+              program_counter_plus1 & "00";
+            next_operand3_immediate_val :=
+              unsigned(signed(program_counter_plus1) + signed(d_short_imm))
+              & "00";
+            next_destination_addr := d_zero;
+            next_decode_val_from_reg := '0';
+            next_decode_branch_from_reg := '0';
+            next_decode_branch_available := '0';
+            next_decoded_instruction_available := '1';
           when COP1_FMT_S =>
             case d_funct is
-              when COP1_FUNCT_ADD | COP1_FUNCT_SUB | COP1_FUNCT_NEG =>
+              when
+                  COP1_FUNCT_ADD | COP1_FUNCT_SUB | COP1_FUNCT_NEG |
+                  COP1_FUNCT_MUL =>
                 next_decode_rob_type := rob_type_calc;
-                next_unit_id := unit_fadd;
+                if d_funct = COP1_FUNCT_MUL then
+                  next_unit_id := unit_fmul;
+                else
+                  next_unit_id := unit_fadd;
+                end if;
                 if d_funct = COP1_FUNCT_ADD then
                   next_unit_operation :=
                     to_unsigned(0, next_unit_operation'length);
@@ -556,6 +603,9 @@ begin
                 elsif d_funct = COP1_FUNCT_NEG then
                   next_unit_operation :=
                     to_unsigned(2, next_unit_operation'length);
+                elsif d_funct = COP1_FUNCT_MUL then
+                  next_unit_operation :=
+                    to_unsigned(0, next_unit_operation'length);
                 else
                   assert false severity failure;
                 end if;
@@ -566,6 +616,24 @@ begin
                 next_operand1_addr := d_ft;
                 next_operand1_immediate_val := (others => '-');
                 next_destination_addr := d_fd;
+                next_decode_val_from_reg := '0';
+                next_decode_branch_from_reg := '0';
+                next_decode_branch_available := '1';
+                next_decode_branch_value := program_counter_plus1 & "00";
+                next_decoded_instruction_available := '1';
+              when COP1_FUNCT_C_F | COP1_FUNCT_C_UN | COP1_FUNCT_C_EQ |
+                   COP1_FUNCT_C_UEQ | COP1_FUNCT_C_OLT | COP1_FUNCT_C_ULT |
+                   COP1_FUNCT_C_OLE | COP1_FUNCT_C_ULE =>
+                next_decode_rob_type := rob_type_calc;
+                next_unit_id := unit_fcmp;
+                next_unit_operation := instruction_register(3 downto 0);
+                next_operand0_use_immediate := '0';
+                next_operand0_addr := d_fs;
+                next_operand0_immediate_val := (others => '-');
+                next_operand1_use_immediate := '0';
+                next_operand1_addr := d_ft;
+                next_operand1_immediate_val := (others => '-');
+                next_destination_addr := d_cc0;
                 next_decode_val_from_reg := '0';
                 next_decode_branch_from_reg := '0';
                 next_decode_branch_available := '1';
@@ -760,7 +828,7 @@ begin
 
   any_dispatch <=
     none_dispatch or mem_dispatch or branch_dispatch or alu_dispatch
-    or fadd_dispatch;
+    or fadd_dispatch or fmul_dispatch or fcmp_dispatch;
 
   dispatch_sequential : process(clk, rst)
   begin
@@ -990,6 +1058,88 @@ begin
     fp_in0 => fadd_operands(0),
     fp_in1 => fadd_operands(1),
     fp_out => cdb_value(3));
+
+  fmul_dispatch <=
+    fmul_dispatchable when
+      decoded_instruction_available = '1' and unit_id = unit_fmul
+    else '0';
+  fmul_available <= '1';
+
+  fmul_reservation_station : reservation_station
+  generic map (
+    unit_name => "fmul",
+    latency => 3,
+    num_entries => 2,
+    num_operands => 2,
+    opcode_len => 2)
+  port map (
+    clk => clk,
+    rst => rst,
+    refetch => refetch,
+    cdb_in_available => cdb_available,
+    cdb_in_value => cdb_value,
+    cdb_in_tag => cdb_tag,
+    dispatch_opcode => unit_operation(1 downto 0),
+    dispatch_operands => dispatch_operands_2,
+    dispatch => fmul_dispatch,
+    dispatch_tag => rob_bottom,
+    dispatchable => fmul_dispatchable,
+    unit_available => fmul_available,
+    issue => fmul_issue,
+    issue_opcode => fmul_opcode,
+    issue_operands => fmul_operands,
+    broadcast_available => cdb_available(4),
+    broadcast_tag => cdb_tag(4));
+
+  fmul_unit : fp_multiplier
+  port map (
+    clk => clk,
+    rst => rst,
+    opcode => fmul_opcode,
+    fp_in0 => fmul_operands(0),
+    fp_in1 => fmul_operands(1),
+    fp_out => cdb_value(4));
+
+  fcmp_dispatch <=
+    fcmp_dispatchable when
+      decoded_instruction_available = '1' and unit_id = unit_fcmp
+    else '0';
+  fcmp_available <= '1';
+
+  fcmp_reservation_station : reservation_station
+  generic map (
+    unit_name => "fcmp",
+    latency => 2,
+    num_entries => 2,
+    num_operands => 2,
+    opcode_len => 4)
+  port map (
+    clk => clk,
+    rst => rst,
+    refetch => refetch,
+    cdb_in_available => cdb_available,
+    cdb_in_value => cdb_value,
+    cdb_in_tag => cdb_tag,
+    dispatch_opcode => unit_operation,
+    dispatch_operands => dispatch_operands_2,
+    dispatch => fcmp_dispatch,
+    dispatch_tag => rob_bottom,
+    dispatchable => fcmp_dispatchable,
+    unit_available => fcmp_available,
+    issue => fcmp_issue,
+    issue_opcode => fcmp_opcode,
+    issue_operands => fcmp_operands,
+    broadcast_available => cdb_available(5),
+    broadcast_tag => cdb_tag(5));
+
+  fcmp_unit : fp_comparator
+  port map (
+    clk => clk,
+    rst => rst,
+    opcode => fcmp_opcode,
+    fp_in0 => fcmp_operands(0),
+    fp_in1 => fcmp_operands(1),
+    fp_out => cdb_value(5));
 
   calc_commit <=
     rob_top_committable when rob_top_type = rob_type_calc else '0';
