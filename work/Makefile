@@ -1,10 +1,10 @@
 #!/usr/bin/make -f
 
 LIBRARYNAME = work
-FPU_SOURCES = fadd.vhd feq.vhd fle.vhd flt.vhd \
+FPU_SOURCES = fadd.vhd fdiv.vhd feq.vhd finv.vhd fle.vhd flt.vhd \
 	      fmul_stage1.vhd fmul_stage2.vhd \
 	      fmul.vhd fpu_core.vhd \
-	      ftoi.vhd itof.vhd
+	      fsqrt.vhd ftoi.vhd itof.vhd
 CORE_SOURCES = \
 	serial.vhd kakeudon.vhd memory_controller.vhd register_file.vhd \
 	reservation_station.vhd reorder_buffer.vhd \
