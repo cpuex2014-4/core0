@@ -10,7 +10,7 @@ package kakeudon is
   subtype internal_register_t is unsigned(6 downto 0);
   subtype tomasulo_tag_t is unsigned(3 downto 0);
 
-  constant cdb_size : natural := 3;
+  constant cdb_size : natural := 4;
   subtype cdb_id_t is integer range 0 to cdb_size-1;
   subtype cdb_extended_id_t is integer range 0 to cdb_size;
 
@@ -244,6 +244,16 @@ package kakeudon is
       alu_out : out unsigned(31 downto 0));
   end component alu;
 
+  component fp_adder is
+    port (
+      clk : in std_logic;
+      rst : in std_logic;
+      opcode : in unsigned(1 downto 0);
+      fp_in0 : in unsigned(31 downto 0);
+      fp_in1 : in unsigned(31 downto 0);
+      fp_out : out unsigned(31 downto 0));
+  end component fp_adder;
+
   subtype opcode_t is integer range 0 to 63;
   constant OP_SPECIAL : opcode_t := 2#000000#;
   constant OP_J       : opcode_t := 2#000010#;
@@ -299,6 +309,7 @@ package kakeudon is
   constant COP1_FUNCT_MUL   : cop1_funct_t := 2#000010#;
   constant COP1_FUNCT_DIV   : cop1_funct_t := 2#000011#;
   constant COP1_FUNCT_MOV   : cop1_funct_t := 2#000110#;
+  constant COP1_FUNCT_NEG   : cop1_funct_t := 2#000111#;
   constant COP1_FUNCT_CVT_S : cop1_funct_t := 2#100000#;
   constant COP1_FUNCT_CVT_W : cop1_funct_t := 2#100100#;
   constant COP1_FUNCT_C_EQ  : cop1_funct_t := 2#110010#;

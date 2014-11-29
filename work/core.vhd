@@ -87,6 +87,7 @@ architecture behavioral of core is
   signal dispatch_rob_val : value_or_tag_t;
   signal dispatch_branch : value_or_tag_t;
   signal wr0_enable : std_logic;
+  signal wr0_tag : tomasulo_tag_t;
 
   signal none_dispatch : std_logic;
   signal any_dispatch : std_logic;
@@ -109,6 +110,13 @@ architecture behavioral of core is
   signal alu_issue : std_logic;
   signal alu_opcode : unsigned(3 downto 0);
   signal alu_operands : unsigned_word_array_t(0 to 1);
+
+  signal fadd_dispatchable : std_logic;
+  signal fadd_dispatch : std_logic := '0';
+  signal fadd_available : std_logic;
+  signal fadd_issue : std_logic;
+  signal fadd_opcode : unsigned(1 downto 0);
+  signal fadd_operands : unsigned_word_array_t(0 to 1);
 
   -- reorder buffer
   signal rob_top_committable : std_logic;
@@ -189,7 +197,7 @@ begin
     variable d_rt : internal_register_t;
     variable d_rd : internal_register_t;
     variable d_sa : unsigned(4 downto 0);
-    variable d_fmt : unsigned(4 downto 0);
+    variable d_fmt : cop1_fmt_t;
     variable d_fs : internal_register_t;
     variable d_ft : internal_register_t;
     variable d_fd : internal_register_t;
@@ -287,7 +295,7 @@ begin
         d_rt := "00" & instruction_register(20 downto 16);
         d_rd := "00" & instruction_register(15 downto 11);
         d_sa := instruction_register(10 downto 6);
-        d_fmt := instruction_register(25 downto 21);
+        d_fmt := to_integer(instruction_register(25 downto 21));
         d_ft := "01" & instruction_register(20 downto 16);
         d_fs := "01" & instruction_register(15 downto 11);
         d_fd := "01" & instruction_register(10 downto 6);
@@ -506,6 +514,89 @@ begin
           next_decode_branch_available := '1';
           next_decode_branch_value := program_counter_plus1 & "00";
           next_decoded_instruction_available := '1';
+        when OP_COP1 =>
+          case d_fmt is
+          when COP1_FMT_MFC1 =>
+            next_decode_rob_type := rob_type_calc;
+            next_unit_id := unit_none;
+            next_operand0_use_immediate := '0';
+            next_operand0_addr := d_fs;
+            next_destination_addr := d_rt;
+            next_decode_val_from_reg := '1';
+            next_decode_val_from_reg_select := '0';
+            next_decode_branch_from_reg := '0';
+            next_decode_branch_available := '1';
+            next_decode_branch_value := program_counter_plus1 & "00";
+            next_decoded_instruction_available := '1';
+          when COP1_FMT_MTC1 =>
+            next_decode_rob_type := rob_type_calc;
+            next_unit_id := unit_none;
+            next_operand1_use_immediate := '0';
+            next_operand1_addr := d_rt;
+            next_destination_addr := d_fs;
+            next_decode_val_from_reg := '1';
+            next_decode_val_from_reg_select := '1';
+            next_decode_branch_from_reg := '0';
+            next_decode_branch_available := '1';
+            next_decode_branch_value := program_counter_plus1 & "00";
+            next_decoded_instruction_available := '1';
+          when COP1_FMT_BC =>
+            report "unimplemented: BC1F/BC1T" severity failure;
+          when COP1_FMT_S =>
+            case d_funct is
+              when COP1_FUNCT_ADD | COP1_FUNCT_SUB | COP1_FUNCT_NEG =>
+                next_decode_rob_type := rob_type_calc;
+                next_unit_id := unit_fadd;
+                if d_funct = COP1_FUNCT_ADD then
+                  next_unit_operation :=
+                    to_unsigned(0, next_unit_operation'length);
+                elsif d_funct = COP1_FUNCT_SUB then
+                  next_unit_operation :=
+                    to_unsigned(1, next_unit_operation'length);
+                elsif d_funct = COP1_FUNCT_NEG then
+                  next_unit_operation :=
+                    to_unsigned(2, next_unit_operation'length);
+                else
+                  assert false severity failure;
+                end if;
+                next_operand0_use_immediate := '0';
+                next_operand0_addr := d_fs;
+                next_operand0_immediate_val := (others => '-');
+                next_operand1_use_immediate := '0';
+                next_operand1_addr := d_ft;
+                next_operand1_immediate_val := (others => '-');
+                next_destination_addr := d_fd;
+                next_decode_val_from_reg := '0';
+                next_decode_branch_from_reg := '0';
+                next_decode_branch_available := '1';
+                next_decode_branch_value := program_counter_plus1 & "00";
+                next_decoded_instruction_available := '1';
+              when COP1_FUNCT_MOV =>
+                next_decode_rob_type := rob_type_calc;
+                next_unit_id := unit_none;
+                next_operand0_use_immediate := '0';
+                next_operand0_addr := d_fs;
+                next_destination_addr := d_fd;
+                next_decode_val_from_reg := '1';
+                next_decode_val_from_reg_select := '0';
+                next_decode_branch_from_reg := '0';
+                next_decode_branch_available := '1';
+                next_decode_branch_value := program_counter_plus1 & "00";
+                next_decoded_instruction_available := '1';
+            when others =>
+              report "unknown COP1.S funct " & bin_of_int(d_funct,6)
+                severity failure;
+            end case;
+          when COP1_FMT_W =>
+            case d_funct is
+            when others =>
+              report "unknown COP1.W funct " & bin_of_int(d_funct,6)
+                severity failure;
+            end case;
+          when others =>
+            report "unknown COP1 fmt " & bin_of_int(d_fmt,5)
+              severity failure;
+          end case;
         when OP_LW =>
           next_decode_rob_type := rob_type_calc;
           next_unit_id := unit_mem;
@@ -668,7 +759,8 @@ begin
     decoded_instruction_available when unit_id = unit_none else '0';
 
   any_dispatch <=
-    none_dispatch or mem_dispatch or branch_dispatch or alu_dispatch;
+    none_dispatch or mem_dispatch or branch_dispatch or alu_dispatch
+    or fadd_dispatch;
 
   dispatch_sequential : process(clk, rst)
   begin
@@ -679,6 +771,9 @@ begin
   end process dispatch_sequential;
 
   wr0_enable <= any_dispatch and not refetch;
+  wr0_tag <=
+    rob_bottom when dispatch_rob_val.available = '1' else
+    dispatch_rob_val.tag;
 
   reg : register_file
   port map (
@@ -694,7 +789,7 @@ begin
     rd1 => dispatch_operand1_reg,
     wr0_addr => destination_addr,
     wr0_enable => wr0_enable,
-    wr0_tag => rob_bottom,
+    wr0_tag => wr0_tag,
     wr1_addr => rob_top_dest,
     wr1_enable => rob_top_committable,
     wr1_tag => rob_top,
@@ -742,13 +837,13 @@ begin
   recv_data_from_memory: process(clk, rst)
   begin
     if rst = '1' then
-      cdb_available(1) <= '0';
-      cdb_value(1) <= (others => '-');
-      cdb_tag(1) <= (others => '-');
+      cdb_available(0) <= '0';
+      cdb_value(0) <= (others => '-');
+      cdb_tag(0) <= (others => '-');
     elsif rising_edge(clk) then
-      cdb_available(1) <= mem_avail_read;
-      cdb_value(1) <= mem_data_read;
-      cdb_tag(1) <= mem_tag_read;
+      cdb_available(0) <= mem_avail_read;
+      cdb_value(0) <= mem_data_read;
+      cdb_tag(0) <= mem_tag_read;
     end if;
   end process recv_data_from_memory;
 
@@ -781,8 +876,8 @@ begin
     issue => branch_issue,
     issue_opcode => branch_opcode,
     issue_operands => branch_operands,
-    broadcast_available => cdb_available(2),
-    broadcast_tag => cdb_tag(2));
+    broadcast_available => cdb_available(1),
+    broadcast_tag => cdb_tag(1));
 
   branch_process : process(clk, rst)
     variable compar_result : std_logic;
@@ -812,7 +907,7 @@ begin
           branch_result := branch_operands(2);
         end if;
       end if;
-      cdb_value(2) <= branch_result;
+      cdb_value(1) <= branch_result;
     end if;
   end process branch_process;
 
@@ -845,15 +940,56 @@ begin
     issue => alu_issue,
     issue_opcode => alu_opcode,
     issue_operands => alu_operands,
-    broadcast_available => cdb_available(0),
-    broadcast_tag => cdb_tag(0));
+    broadcast_available => cdb_available(2),
+    broadcast_tag => cdb_tag(2));
 
   alu_unit : alu
   port map (
     alu_opcode => alu_opcode,
     alu_in0 => alu_operands(0),
     alu_in1 => alu_operands(1),
-    alu_out => cdb_value(0));
+    alu_out => cdb_value(2));
+
+  fadd_dispatch <=
+    fadd_dispatchable when
+      decoded_instruction_available = '1' and unit_id = unit_fadd
+    else '0';
+  fadd_available <= '1';
+
+  fadd_reservation_station : reservation_station
+  generic map (
+    unit_name => "fadd",
+    latency => 3,
+    num_entries => 2,
+    num_operands => 2,
+    opcode_len => 2)
+  port map (
+    clk => clk,
+    rst => rst,
+    refetch => refetch,
+    cdb_in_available => cdb_available,
+    cdb_in_value => cdb_value,
+    cdb_in_tag => cdb_tag,
+    dispatch_opcode => unit_operation(1 downto 0),
+    dispatch_operands => dispatch_operands_2,
+    dispatch => fadd_dispatch,
+    dispatch_tag => rob_bottom,
+    dispatchable => fadd_dispatchable,
+    unit_available => fadd_available,
+    issue => fadd_issue,
+    issue_opcode => fadd_opcode,
+    issue_operands => fadd_operands,
+    broadcast_available => cdb_available(3),
+    broadcast_tag => cdb_tag(3));
+
+  fadd_unit : fp_adder
+  port map (
+    clk => clk,
+    rst => rst,
+    opcode => fadd_opcode,
+    fp_in0 => fadd_operands(0),
+    fp_in1 => fadd_operands(1),
+    fp_out => cdb_value(3));
 
   calc_commit <=
     rob_top_committable when rob_top_type = rob_type_calc else '0';
