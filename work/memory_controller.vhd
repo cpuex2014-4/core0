@@ -49,7 +49,7 @@ architecture behavioral of memory_controller is
   constant debug_out : boolean := true;
 
   type instruction_memory_t is
-    array(0 to 32768-1) of unsigned(31 downto 0);
+    array(0 to 32767) of unsigned(31 downto 0);
   signal instruction_memory : instruction_memory_t;
   attribute ram_style of instruction_memory: signal is "block";
   signal instruction_rom : instruction_rom_t := instruction_rom_data;
