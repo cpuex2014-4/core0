@@ -535,24 +535,30 @@ begin
           case d_fmt is
           when COP1_FMT_MFC1 =>
             next_decode_rob_type := rob_type_calc;
-            next_unit_id := unit_none;
+            next_unit_id := unit_fadd;
+            next_unit_operation :=
+              to_unsigned(2, next_unit_operation'length);
             next_operand0_use_immediate := '0';
             next_operand0_addr := d_fs;
+            next_operand1_use_immediate := '0';
+            next_operand1_addr := d_zero;
             next_destination_addr := d_rt;
-            next_decode_val_from_reg := '1';
-            next_decode_val_from_reg_select := '0';
+            next_decode_val_from_reg := '0';
             next_decode_branch_from_reg := '0';
             next_decode_branch_available := '1';
             next_decode_branch_value := program_counter_plus1 & "00";
             next_decoded_instruction_available := '1';
           when COP1_FMT_MTC1 =>
             next_decode_rob_type := rob_type_calc;
-            next_unit_id := unit_none;
+            next_unit_id := unit_fadd;
+            next_unit_operation :=
+              to_unsigned(2, next_unit_operation'length);
+            next_operand0_use_immediate := '0';
+            next_operand0_addr := d_rt;
             next_operand1_use_immediate := '0';
-            next_operand1_addr := d_rt;
+            next_operand1_addr := d_zero;
             next_destination_addr := d_fs;
-            next_decode_val_from_reg := '1';
-            next_decode_val_from_reg_select := '1';
+            next_decode_val_from_reg := '0';
             next_decode_branch_from_reg := '0';
             next_decode_branch_available := '1';
             next_decode_branch_value := program_counter_plus1 & "00";
@@ -586,8 +592,8 @@ begin
           when COP1_FMT_S =>
             case d_funct is
               when
-                  COP1_FUNCT_ADD | COP1_FUNCT_SUB | COP1_FUNCT_NEG |
-                  COP1_FUNCT_MUL =>
+                  COP1_FUNCT_ADD | COP1_FUNCT_SUB | COP1_FUNCT_MOV |
+                  COP1_FUNCT_NEG | COP1_FUNCT_MUL =>
                 next_decode_rob_type := rob_type_calc;
                 if d_funct = COP1_FUNCT_MUL then
                   next_unit_id := unit_fmul;
@@ -600,9 +606,12 @@ begin
                 elsif d_funct = COP1_FUNCT_SUB then
                   next_unit_operation :=
                     to_unsigned(1, next_unit_operation'length);
-                elsif d_funct = COP1_FUNCT_NEG then
+                elsif d_funct = COP1_FUNCT_MOV then
                   next_unit_operation :=
                     to_unsigned(2, next_unit_operation'length);
+                elsif d_funct = COP1_FUNCT_NEG then
+                  next_unit_operation :=
+                    to_unsigned(3, next_unit_operation'length);
                 elsif d_funct = COP1_FUNCT_MUL then
                   next_unit_operation :=
                     to_unsigned(0, next_unit_operation'length);
@@ -635,18 +644,6 @@ begin
                 next_operand1_immediate_val := (others => '-');
                 next_destination_addr := d_cc0;
                 next_decode_val_from_reg := '0';
-                next_decode_branch_from_reg := '0';
-                next_decode_branch_available := '1';
-                next_decode_branch_value := program_counter_plus1 & "00";
-                next_decoded_instruction_available := '1';
-              when COP1_FUNCT_MOV =>
-                next_decode_rob_type := rob_type_calc;
-                next_unit_id := unit_none;
-                next_operand0_use_immediate := '0';
-                next_operand0_addr := d_fs;
-                next_destination_addr := d_fd;
-                next_decode_val_from_reg := '1';
-                next_decode_val_from_reg_select := '0';
                 next_decode_branch_from_reg := '0';
                 next_decode_branch_available := '1';
                 next_decode_branch_value := program_counter_plus1 & "00";

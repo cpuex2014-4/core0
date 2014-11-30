@@ -50,7 +50,7 @@ begin
       fp_in0_delay1 <= fp_in0;
       opcode_delay1 <= opcode;
       fp_in0_neg_delay2 <=
-        (not fp_in0_delay1(31)) & fp_in0_delay1(30 downto 0);
+        (opcode_delay1(0) xor fp_in0_delay1(31)) & fp_in0_delay1(30 downto 0);
       opcode_delay2 <= opcode_delay1;
     end if;
   end process sequential;
