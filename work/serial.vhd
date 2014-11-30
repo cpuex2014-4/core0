@@ -78,8 +78,8 @@ architecture behavioral of rs232c is
   constant stopcnt_u : unsigned := to_unsigned(stopcnt-1, counter_size);
   constant startcnt_u : unsigned := to_unsigned(startcnt-1, counter_size);
 
-  signal rxd_latched : std_logic;
-  signal rxd_latched2 : std_logic;
+  signal rxd_latched : std_logic := '1';
+  signal rxd_latched2 : std_logic := '1';
 
   signal send_buf : std_logic_vector(databit+1 downto 0) := (others => '1');
   signal send_counter : unsigned(counter_size-1 downto 0);

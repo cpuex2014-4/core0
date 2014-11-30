@@ -12,10 +12,11 @@ end entity cpu_tb;
 
 architecture behavioral of cpu_tb is
   constant clk_freq : real := 66.666e6;
-  constant test_baudrate : real := 1000000.0;
+  constant test_baudrate : real := 4000000.0;
   constant test_stopbit : real := 1.0;
   signal simclk : std_logic;
   signal txd : std_logic := '1';
+  signal txd1 : std_logic := '1';
   signal rxd : std_logic := '1';
   signal rxd1 : std_logic := '1';
   signal send_busy : std_logic;
@@ -47,7 +48,9 @@ architecture behavioral of cpu_tb is
   signal XFT : std_logic;
   signal XLBO : std_logic;
 begin
-  rxd <= transport rxd1 after 100 ns;
+  -- rxd <= transport rxd1 after 10 ns;
+  rxd <= rxd1;
+  txd <= txd1;
   rdf : process(simclk)
     variable read_byte : integer;
     variable send_go_v : std_logic;
@@ -102,7 +105,7 @@ begin
     rs_stopbit => test_stopbit)
   port map (
     clk => simclk,
-    RS_TX => txd,
+    RS_TX => txd1,
     RS_RX => rxd,
     rst => rst,
     ZA => ZA,
