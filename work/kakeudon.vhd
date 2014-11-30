@@ -518,6 +518,8 @@ package body kakeudon is
       return gpr_name(to_integer(r(4 downto 0)));
     elsif r < 64 then
       return "$f" & integer'image(to_integer(r-32));
+    elsif r = 64 then
+      return "$cc0";
     else
       return "$" & integer'image(to_integer(r));
     end if;
