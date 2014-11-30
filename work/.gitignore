@@ -1,5 +1,8 @@
-/out.txt
+/in.dat
 /out.dat
+/out.ppm
+/examples
+/files
 /*_tb
 *.o
 *.cf
