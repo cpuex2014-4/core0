@@ -30,6 +30,7 @@ end entity core;
 architecture behavioral of core is
   constant debug_instruction_fetch : boolean := true;
   constant debug_cdb : boolean := true;
+  constant disable_branch_prediction : boolean := false;
 
   signal cdb_available : std_logic_vector(0 to cdb_size-1);
   signal cdb_value : cdb_in_value_t;
@@ -42,11 +43,13 @@ architecture behavioral of core is
   signal refetch_address : unsigned(31 downto 0);
 
   -- instruction fetch
-  signal program_counter_plus1 : unsigned(29 downto 0);
+  signal program_counter_plus1 : unsigned(29 downto 0)
+    := initial_program_counter(31 downto 2);
   signal instruction_register : unsigned(31 downto 0);
   signal instruction_register_old : unsigned(31 downto 0);
   signal instruction_fetch_stalled : std_logic;
-  signal instruction_predicted_branch : unsigned(29 downto 0);
+  signal instruction_predicted_branch : unsigned(29 downto 0)
+    := initial_program_counter(31 downto 2);
   signal instruction_register_available : std_logic := '0';
 
   signal instruction_fetch_stall : std_logic := '0';
@@ -150,18 +153,57 @@ architecture behavioral of core is
   signal store_commit : std_logic;
   signal any_commit: std_logic;
 begin
-  mem_inst_addr <= program_counter;
+  -- mem_inst_addr <= program_counter;
+  mem_inst_addr <= instruction_predicted_branch;
   instruction_register <=
     (others => 'X') when TO_X01(instruction_fetch_stalled) = 'X' else
     mem_inst_data when instruction_fetch_stalled = '0' else
     instruction_register_old;
 
+  branch_prediction :
+  process(instruction_register_available, program_counter,
+          program_counter_plus1, instruction_register)
+    variable bp_opcode : opcode_t;
+    variable bp_funct : funct_t;
+    variable bp_fmt : cop1_fmt_t;
+    variable bp_imm : signed(15 downto 0);
+    variable next_bp_predicted_branch : unsigned(29 downto 0);
+  begin
+    if instruction_register_available = '0' then
+      next_bp_predicted_branch := program_counter;
+    elsif TO_01(instruction_register, 'X')(0) = 'X' then
+      next_bp_predicted_branch := (others => '-');
+    else
+      bp_opcode := to_integer(instruction_register(31 downto 26));
+      bp_funct := to_integer(instruction_register(5 downto 0));
+      bp_fmt := to_integer(instruction_register(25 downto 21));
+      bp_imm := signed(instruction_register(15 downto 0));
+      if disable_branch_prediction then
+        next_bp_predicted_branch :=
+          program_counter_plus1;
+      elsif bp_opcode = OP_J or bp_opcode = OP_JAL then
+        next_bp_predicted_branch :=
+          program_counter_plus1(29 downto 26) &
+          instruction_register(25 downto 0);
+      elsif
+          (bp_opcode = OP_BEQ or bp_opcode = OP_BNE or
+           (bp_opcode = OP_COP1 and bp_fmt = COP1_FMT_BC)) and bp_imm < 0 then
+        next_bp_predicted_branch :=
+          program_counter_plus1(29 downto 26) &
+          unsigned(
+            signed(program_counter_plus1(25 downto 0)) + bp_imm);
+      else
+        next_bp_predicted_branch :=
+          program_counter_plus1;
+      end if;
+    end if;
+    instruction_predicted_branch <= next_bp_predicted_branch;
+  end process branch_prediction;
+
   instruction_fetch_sequential : process(clk, rst)
   begin
     if rst = '1' then
       program_counter <= initial_program_counter(31 downto 2);
-      program_counter_plus1 <= (others => '-');
-      instruction_predicted_branch <= (others => '-');
       instruction_register_available <= '0';
     elsif rising_edge(clk) then
       assert TO_X01(refetch) /= 'X'
@@ -178,8 +220,6 @@ begin
           report "refetch; address is " & hex_of_word(refetch_address)
             severity note;
         program_counter <= refetch_address(31 downto 2);
-        program_counter_plus1 <= (others => '-');
-        instruction_predicted_branch <= (others => '-');
         instruction_register_available <= '0';
         instruction_fetch_stalled <= '-';
       elsif instruction_fetch_stall /= '1' then
@@ -189,9 +229,7 @@ begin
         assert not debug_instruction_fetch
           report "program_counter = " & hex_of_word(program_counter&"00")
             severity note;
-        program_counter <= program_counter + 1;
-        program_counter_plus1 <= program_counter + 1;
-        instruction_predicted_branch <= program_counter + 1;
+        program_counter <= instruction_predicted_branch + 1;
         instruction_register_available <= '1';
         instruction_fetch_stalled <= '0';
       else
@@ -200,6 +238,7 @@ begin
       instruction_register_old <= instruction_register;
     end if;
   end process instruction_fetch_sequential;
+  program_counter_plus1 <= program_counter;
 
   instruction_fetch_stall <=
     instruction_register_available and decode_stall;
