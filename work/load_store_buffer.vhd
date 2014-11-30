@@ -210,7 +210,7 @@ begin
                     debug_out,
                     "LSBufer Stage 1: " &
                     "dispatch: entry tag " &
-                      dec_of_unsigned(stage1_entries_tag(i)));
+                      dec_of_unsigned(dispatch_tag));
             stage1_entries_operand2(i) <= dispatch_operand2;
           elsif stage1_entries_issuable = '1' then
             if i = num_stage1_entries-1 then

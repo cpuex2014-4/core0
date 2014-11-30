@@ -319,7 +319,7 @@ begin
                       debug_out,
                       "RnSn for " & unit_name & ": " &
                       "dispatch: entry tag " &
-                        dec_of_unsigned(entries_tag(i)) &
+                        dec_of_unsigned(dispatch_tag) &
                       ": operand" & integer'image(opid));
             end loop;
           elsif entries_issuable_accum(i) = '1' then
