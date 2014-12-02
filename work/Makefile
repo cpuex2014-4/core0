@@ -1,50 +1,40 @@
 #!/usr/bin/make -f
 
 LIBRARYNAME = work
-FPU_SOURCES = fadd.vhd fdiv.vhd feq.vhd finv.vhd fle.vhd flt.vhd \
-	      fmul_stage1.vhd fmul_stage2.vhd \
-	      fmul.vhd fpu_core.vhd \
-	      fsqrt.vhd ftoi.vhd itof.vhd
-CORE_SOURCES = \
-	serial.vhd kakeudon.vhd memory_controller.vhd register_file.vhd \
-	reservation_station.vhd reorder_buffer.vhd \
-	load_store_buffer.vhd \
-	fp_adder.vhd fp_multiplier.vhd fp_comparator.vhd \
-	alu.vhd io_rs232c.vhd core.vhd cpu.vhd \
-	sramsim.vhd cpu_tb.vhd
-SOURCES = $(FPU_SOURCES:%=../fpu/VHDL/%) $(CORE_SOURCES)
-# SOURCES = \
-# 	serial.vhd cpu.vhd top.vhd \
-# 	sramsim.vhd cpu_tb.vhd top_tb.vhd
 TESTBENCHES = cpu_tb
-# TESTBENCHES = cpu_tb top_tb
-
-OBJS = $(FPU_SOURCES:.vhd=.o) $(CORE_SOURCES:.vhd=.o)
+include sources.mk
 
 GHDLC = ghdl
 GHDLFLAGS = \
 	-fexplicit --ieee=synopsys --work=$(LIBRARYNAME) \
-	--mb-comments \
-	#--std=93
+	--mb-comments
 GHDL_SIM_OPT = --stop-time=500ms
 
-.PHONY: all test clean check-syntax $(TESTBENCHES)
+.PHONY: all test clean check-syntax run_cpu_tb
 
-all: $(OBJS)
+all: $(TESTBENCHES)
 
-$(OBJS): $(SOURCES)
-	$(GHDLC) -a $(GHDLFLAGS) $^
+$(TESTBENCHES): work-obj93.cf $(SOURCES)
+	$(GHDLC) -m $(GHDLFLAGS) $@
 
-test: $(TESTBENCHES)
+run_cpu_tb: cpu_tb finvTable.data fsqrtTable.data
+	$(GHDLC) -r $(GHDLFLAGS) $< $(GHDL_SIM_OPT)
 
-$(TESTBENCHES): $(OBJS)
-	$(GHDLC) -e $(GHDLFLAGS) $@
-	# $(GHDLC) -r $(GHDLFLAGS) $@ $(GHDL_SIM_OPT) --vcd=$@.vcd
-	$(GHDLC) -r $(GHDLFLAGS) $@ $(GHDL_SIM_OPT)
+work-obj93.cf: sources.mk
+	$(RM) $@
+	for i in $(SOURCES); do \
+		$(GHDLC) -i $(GHDLFLAGS) $$i; \
+	done
 
 check-syntax:
 	$(GHDLC) -s $(SOURCES)
 
 clean :
 	$(GHDLC) --clean
-	$(RM) $(wildcard *.cf *.vcd)
+	$(RM) finvTable.data fsqrtTable.data
+
+finvTable.data: ../fpu/VHDL/finvTable.py
+	python $<
+
+fsqrtTable.data: ../fpu/VHDL/fsqrtTable.py
+	python $<
