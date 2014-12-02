@@ -8,7 +8,8 @@ use work.kakeudon.all;
 
 entity reorder_buffer is
   generic (
-    debug_out : boolean);
+    debug_out : boolean;
+    debug_out_commit : boolean);
   port (
     clk : in std_logic;
     rst : in std_logic;
@@ -22,6 +23,7 @@ entity reorder_buffer is
     dispatch_rob_val : in value_or_tag_t;
     dispatch_branch : in value_or_tag_t;
     dispatch_predicted_branch : in unsigned(31 downto 0);
+    dispatch_program_counter_plus1 : in unsigned(29 downto 0);
     rob_top_committable : out std_logic;
     rob_top : out tomasulo_tag_t;
     rob_top_type : out rob_type_t;
@@ -58,6 +60,7 @@ architecture behavioral of reorder_buffer is
 
   signal rob_entries_branch : rob_entries_value_or_tag_t;
   signal rob_entries_predicted_branch : rob_entries_word_t;
+  signal rob_entries_program_counter_plus1 : rob_entries_word_t;
 
   signal internal_rob_top_committable : std_logic;
   signal internal_refetch : std_logic;
@@ -137,6 +140,8 @@ begin
                   "dispatch:ROB(" & dec_of_unsigned(rob_end) & ").branch");
           rob_entries_predicted_branch(to_integer(rob_end)) <=
             dispatch_predicted_branch;
+          rob_entries_program_counter_plus1(to_integer(rob_end)) <=
+            dispatch_program_counter_plus1&"00";
 
           assert not debug_out
             report
@@ -145,15 +150,21 @@ begin
                 "dest = " & name_of_internal_register(dispatch_dest) & ", " &
                 "val = " & str_of_value_or_tag(dispatch_rob_val) & ", " &
                 "branch = " & str_of_value_or_tag(dispatch_branch) & ", " &
-                "predict = " & hex_of_word(dispatch_predicted_branch) & ")"
+                "predict = " & hex_of_word(dispatch_predicted_branch) & ", " &
+                "pc+4 = " &
+                  hex_of_word(dispatch_program_counter_plus1&"00") & ")"
               severity note;
 
           rob_end <= rob_end + 1;
         end if;
 
         if commit = '1' then
-          assert not debug_out
-            report "commit: tag(" & integer'image(to_integer(rob_start)) & ")"
+          assert not debug_out_commit
+            report "commit: " &
+                "tag(" & integer'image(to_integer(rob_start)) & "), " &
+                "pc+4 = " &
+                  hex_of_word(
+                    rob_entries_program_counter_plus1(to_integer(rob_start)))
               severity note;
           rob_entries_busy(to_integer(rob_start)) <= '0';
           rob_start <= rob_start + 1;

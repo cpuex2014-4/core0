@@ -8,7 +8,8 @@ use work.kakeudon.all;
 
 entity memory_controller is
   generic (
-    debug_out : boolean);
+    debug_out : boolean;
+    debug_out_commit : boolean);
   port (
     clk : in std_logic;
     -- main read/write
@@ -138,7 +139,7 @@ begin
           assert TO_01(addr,'X')(0) /= 'X'
             report "metavalue detected in addr"
               severity warning;
-          assert not debug_out
+          assert not debug_out_commit
             report "Memory[" & hex_of_word(addr&"00") & "] <- " &
               hex_of_word(data_write)
                 severity note;

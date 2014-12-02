@@ -9,7 +9,8 @@ use work.kakeudon.all;
 
 entity core is
   generic (
-    debug_out : boolean);
+    debug_out : boolean;
+    debug_out_commit : boolean);
   port (
     -- main read/write
     mem_enable : out std_logic;
@@ -76,6 +77,7 @@ architecture behavioral of core is
   signal decode_branch_available : std_logic;
   signal decode_branch_value : unsigned(31 downto 0);
   signal decode_predicted_branch : unsigned(31 downto 0);
+  signal decode_program_counter_plus1 : unsigned(29 downto 0);
   signal decoded_instruction_available : std_logic := '0';
 
   signal decode_stall : std_logic := '0';
@@ -91,6 +93,7 @@ architecture behavioral of core is
   signal dispatch_operands_4 : value_or_tag_array_t(0 to 3);
   signal dispatch_rob_val : value_or_tag_t;
   signal dispatch_branch : value_or_tag_t;
+  signal dispatch_program_counter_plus1 : unsigned(29 downto 0);
   signal wr0_enable : std_logic;
   signal wr0_tag : tomasulo_tag_t;
 
@@ -300,6 +303,7 @@ begin
       decode_branch_available <= '-';
       decode_branch_value <= (others => '-');
       decode_predicted_branch <= (others => '-');
+      decode_program_counter_plus1 <= (others => '-');
       decoded_instruction_available <= '0';
     elsif rising_edge(clk) then
       if refetch = '1' then
@@ -321,6 +325,7 @@ begin
         decode_branch_available <= '-';
         decode_branch_value <= (others => '-');
         decode_predicted_branch <= (others => '-');
+        decode_program_counter_plus1 <= (others => '-');
         decoded_instruction_available <= '0';
       elsif instruction_register_available = '1' and decode_stall /= '1' then
         next_decode_rob_type := rob_type_calc; -- don't care
@@ -756,6 +761,7 @@ begin
         decode_branch_available <= next_decode_branch_available;
         decode_branch_value <= next_decode_branch_value;
         decode_predicted_branch <= instruction_predicted_branch & "00";
+        decode_program_counter_plus1 <= program_counter_plus1;
         decoded_instruction_available <= next_decoded_instruction_available;
       elsif decode_stall /= '1' then
         decode_rob_type <= rob_type_calc; -- don't care
@@ -776,6 +782,7 @@ begin
         decode_branch_available <= '-';
         decode_branch_value <= (others => '-');
         decode_predicted_branch <= (others => '-');
+        decode_program_counter_plus1 <= (others => '-');
         decoded_instruction_available <= '0';
       end if;
     end if;
@@ -804,7 +811,8 @@ begin
 
   rob : reorder_buffer
   generic map (
-    debug_out => debug_out)
+    debug_out => debug_out,
+    debug_out_commit => debug_out_commit)
   port map (
     clk => clk,
     rst => rst,
@@ -818,6 +826,7 @@ begin
     dispatch_rob_val => dispatch_rob_val,
     dispatch_branch => dispatch_branch,
     dispatch_predicted_branch => decode_predicted_branch,
+    dispatch_program_counter_plus1 => decode_program_counter_plus1,
     rob_top_committable => rob_top_committable,
     rob_top => rob_top,
     rob_top_type => rob_top_type,
@@ -883,7 +892,8 @@ begin
 
   reg : register_file
   generic map (
-    debug_out => debug_out)
+    debug_out => debug_out,
+    debug_out_commit => debug_out_commit)
   port map (
     clk => clk,
     rst => rst,

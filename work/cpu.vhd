@@ -9,6 +9,7 @@ use work.kakeudon.all;
 entity cpu is
   generic (
     debug_out : boolean;
+    debug_out_commit : boolean;
     rs_baudrate : real;
     rs_stopbit : real);
   port (
@@ -57,7 +58,8 @@ architecture behavioral of cpu is
 begin
   core_unit : core
   generic map (
-    debug_out => debug_out)
+    debug_out => debug_out,
+    debug_out_commit => debug_out_commit)
   port map (
     mem_enable => mem_enable,
     mem_isstore => mem_isstore,
@@ -75,7 +77,8 @@ begin
 
   mem : memory_controller
   generic map (
-    debug_out => debug_out)
+    debug_out => debug_out,
+    debug_out_commit => debug_out_commit)
   port map (
     clk => clk,
     enable => mem_enable,

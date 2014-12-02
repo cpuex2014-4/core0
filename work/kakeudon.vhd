@@ -60,7 +60,8 @@ package kakeudon is
 
   component reorder_buffer is
     generic (
-      debug_out : boolean);
+      debug_out : boolean;
+      debug_out_commit : boolean);
     port (
       clk : in std_logic;
       rst : in std_logic;
@@ -74,6 +75,7 @@ package kakeudon is
       dispatch_rob_val : in value_or_tag_t;
       dispatch_branch : in value_or_tag_t;
       dispatch_predicted_branch : in unsigned(31 downto 0);
+      dispatch_program_counter_plus1 : in unsigned(29 downto 0);
       rob_top_committable : out std_logic;
       rob_top : out tomasulo_tag_t;
       rob_top_type : out rob_type_t;
@@ -118,7 +120,8 @@ package kakeudon is
 
   component core is
     generic (
-      debug_out : boolean);
+      debug_out : boolean;
+      debug_out_commit : boolean);
     port (
       -- Memory Controller
       -- main read/write
@@ -141,6 +144,7 @@ package kakeudon is
   component cpu is
     generic (
       debug_out : boolean;
+      debug_out_commit : boolean;
       rs_baudrate : real;
       rs_stopbit : real);
     port (
@@ -168,7 +172,8 @@ package kakeudon is
 
   component register_file is
     generic (
-      debug_out : boolean);
+      debug_out : boolean;
+      debug_out_commit : boolean);
     port (
       clk : in std_logic;
       rst : in std_logic;
@@ -191,7 +196,8 @@ package kakeudon is
 
   component memory_controller is
     generic (
-      debug_out : boolean);
+      debug_out : boolean;
+      debug_out_commit : boolean);
     port (
       clk : in std_logic;
       -- main read/write

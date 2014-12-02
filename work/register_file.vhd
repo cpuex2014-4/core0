@@ -8,7 +8,8 @@ use work.kakeudon.all;
 
 entity register_file is
   generic (
-    debug_out : boolean);
+    debug_out : boolean;
+    debug_out_commit : boolean);
   port (
     clk : in std_logic;
     rst : in std_logic;
@@ -80,7 +81,7 @@ begin
           assert TO_01(wr1_value, 'X')(0) /= 'X'
             report "metavalue detected in wr1_value"
               severity failure;
-          assert not debug_out
+          assert not debug_out_commit
             report name_of_internal_register(wr1_addr) &
                    " <- " & hex_of_word(wr1_value)
               severity note;
