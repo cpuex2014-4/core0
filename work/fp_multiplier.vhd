@@ -5,6 +5,7 @@ use ieee.numeric_std.all;
 library work;
 use work.serial.all;
 use work.kakeudon.all;
+use work.kakeudon_fpu.all;
 
 entity fp_multiplier is
   generic (
@@ -19,14 +20,6 @@ entity fp_multiplier is
 end entity fp_multiplier;
 
 architecture behavioral of fp_multiplier is
-  component FMUL is
-    port (
-      input1 : in  std_logic_vector (31 downto 0);
-      input2 : in  std_logic_vector (31 downto 0);
-      clk: in std_logic;
-      output : out std_logic_vector (31 downto 0)
-    );
-  end component;
   signal multiplier_in1 : std_logic_vector(31 downto 0);
   signal multiplier_in2 : std_logic_vector(31 downto 0);
   signal multiplier_out : std_logic_vector(31 downto 0);
@@ -48,5 +41,10 @@ begin
     output => multiplier_out
   );
 
-  fp_out <= unsigned(multiplier_out);
+  sequential: process(clk, rst)
+  begin
+    if rising_edge(clk) then
+      fp_out <= unsigned(multiplier_out);
+    end if;
+  end process sequential;
 end architecture behavioral;

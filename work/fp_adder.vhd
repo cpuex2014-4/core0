@@ -5,6 +5,7 @@ use ieee.numeric_std.all;
 library work;
 use work.serial.all;
 use work.kakeudon.all;
+use work.kakeudon_fpu.all;
 
 entity fp_adder is
   generic (
@@ -19,21 +20,11 @@ entity fp_adder is
 end entity fp_adder;
 
 architecture behavioral of fp_adder is
-  component FADD is
-    port (
-      input1 : in  std_logic_vector (31 downto 0);
-      input2 : in  std_logic_vector (31 downto 0);
-      clk : in std_logic;
-      output : out std_logic_vector (31 downto 0)
-    );
-  end component;
   signal adder_in1 : std_logic_vector(31 downto 0);
   signal adder_in2 : std_logic_vector(31 downto 0);
   signal adder_out : std_logic_vector(31 downto 0);
   signal opcode_delay1 : unsigned(1 downto 0);
-  signal fp_in0_delay1 : unsigned(31 downto 0);
-  signal opcode_delay2 : unsigned(1 downto 0);
-  signal fp_in0_neg_delay2 : unsigned(31 downto 0);
+  signal fp_in0_neg_delay1 : unsigned(31 downto 0);
 begin
   -- adder_in1 <= std_logic_vector(fp_in0);
   -- adder_in2 <= std_logic_vector(
@@ -49,11 +40,17 @@ begin
   sequential: process(clk, rst)
   begin
     if rising_edge(clk) then
-      fp_in0_delay1 <= fp_in0;
+      fp_in0_neg_delay1 <=
+        (opcode(0) xor fp_in0(31)) & fp_in0(30 downto 0);
       opcode_delay1 <= opcode;
-      fp_in0_neg_delay2 <=
-        (opcode_delay1(0) xor fp_in0_delay1(31)) & fp_in0_delay1(30 downto 0);
-      opcode_delay2 <= opcode_delay1;
+
+      if TO_X01(opcode_delay1(1)) = 'X' then
+        fp_out <= (others => 'X');
+      elsif opcode_delay1(1) = '0' then
+        fp_out <= unsigned(adder_out);
+      else
+        fp_out <= fp_in0_neg_delay1;
+      end if;
     end if;
   end process sequential;
 
@@ -64,9 +61,4 @@ begin
     clk => clk,
     output => adder_out
   );
-
-  fp_out <=
-    (others => 'X') when TO_X01(opcode_delay2(1)) = 'X' else
-    unsigned(adder_out) when opcode_delay2(1) = '0' else
-    fp_in0_neg_delay2;
 end architecture behavioral;
