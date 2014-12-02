@@ -58,7 +58,7 @@ architecture behavioral of core is
   -- instruction decode
   type unit_id_t is
     (unit_none, unit_mem, unit_branch, unit_alu,
-     unit_fadd, unit_fmul, unit_fcmp);
+     unit_fadd, unit_fmul, unit_fcmp, unit_fothers);
   signal decode_rob_type : rob_type_t;
   signal unit_id : unit_id_t;
   signal unit_operation : unsigned(3 downto 0);
@@ -133,6 +133,13 @@ architecture behavioral of core is
   signal fmul_issue : std_logic;
   signal fmul_opcode : unsigned(1 downto 0);
   signal fmul_operands : unsigned_word_array_t(0 to 1);
+
+  signal fothers_dispatchable : std_logic;
+  signal fothers_dispatch : std_logic := '0';
+  signal fothers_available : std_logic;
+  signal fothers_issue : std_logic;
+  signal fothers_opcode : unsigned(1 downto 0);
+  signal fothers_operands : unsigned_word_array_t(0 to 1);
 
   signal fcmp_dispatchable : std_logic;
   signal fcmp_dispatch : std_logic := '0';
@@ -654,9 +661,14 @@ begin
             case d_funct is
               when
                   COP1_FUNCT_ADD | COP1_FUNCT_SUB | COP1_FUNCT_MOV |
-                  COP1_FUNCT_NEG | COP1_FUNCT_MUL =>
+                  COP1_FUNCT_NEG | COP1_FUNCT_MUL | COP1_FUNCT_DIV |
+                  COP1_FUNCT_SQRT | COP1_FUNCT_CVT_W =>
                 next_decode_rob_type := rob_type_calc;
-                if d_funct = COP1_FUNCT_MUL then
+                if d_funct = COP1_FUNCT_DIV or
+                   d_funct = COP1_FUNCT_SQRT or
+                   d_funct = COP1_FUNCT_CVT_W then
+                  next_unit_id := unit_fothers;
+                elsif d_funct = COP1_FUNCT_MUL then
                   next_unit_id := unit_fmul;
                 else
                   next_unit_id := unit_fadd;
@@ -676,15 +688,27 @@ begin
                 elsif d_funct = COP1_FUNCT_MUL then
                   next_unit_operation :=
                     to_unsigned(0, next_unit_operation'length);
+                elsif d_funct = COP1_FUNCT_DIV then
+                  next_unit_operation :=
+                    to_unsigned(0, next_unit_operation'length);
+                elsif d_funct = COP1_FUNCT_SQRT then
+                  next_unit_operation :=
+                    to_unsigned(1, next_unit_operation'length);
+                elsif d_funct = COP1_FUNCT_CVT_W then
+                  next_unit_operation :=
+                    to_unsigned(3, next_unit_operation'length);
                 else
                   assert false severity failure;
                 end if;
                 next_operand0_use_immediate := '0';
                 next_operand0_addr := d_fs;
-                next_operand0_immediate_val := (others => '-');
                 next_operand1_use_immediate := '0';
-                next_operand1_addr := d_ft;
-                next_operand1_immediate_val := (others => '-');
+                if d_funct = COP1_FUNCT_MOV or d_funct = COP1_FUNCT_NEG or
+                   d_funct = COP1_FUNCT_SQRT or d_funct = COP1_FUNCT_CVT_W then
+                  next_operand1_addr := d_zero;
+                else
+                  next_operand1_addr := d_ft;
+                end if;
                 next_destination_addr := d_fd;
                 next_decode_val_from_reg := '0';
                 next_decode_branch_from_reg := '0';
@@ -932,7 +956,7 @@ begin
 
   any_dispatch <=
     none_dispatch or mem_dispatch or branch_dispatch or alu_dispatch
-    or fadd_dispatch or fmul_dispatch or fcmp_dispatch;
+    or fadd_dispatch or fmul_dispatch or fcmp_dispatch or fothers_dispatch;
 
   dispatch_sequential : process(clk, rst)
   begin
@@ -1263,6 +1287,50 @@ begin
     fp_in0 => fcmp_operands(0),
     fp_in1 => fcmp_operands(1),
     fp_out => cdb_value(5));
+
+  fothers_dispatch <=
+    fothers_dispatchable when
+      decoded_instruction_available = '1' and unit_id = unit_fothers
+    else '0';
+  fothers_available <= '1';
+
+  fothers_reservation_station : reservation_station
+  generic map (
+    debug_out => debug_out,
+    unit_name => "fothers",
+    latency => 7,
+    num_entries => 2,
+    num_operands => 2,
+    opcode_len => 2)
+  port map (
+    clk => clk,
+    rst => rst,
+    refetch => refetch,
+    cdb_in_available => cdb_available,
+    cdb_in_value => cdb_value,
+    cdb_in_tag => cdb_tag,
+    dispatch_opcode => unit_operation(1 downto 0),
+    dispatch_operands => dispatch_operands_2,
+    dispatch => fothers_dispatch,
+    dispatch_tag => rob_bottom,
+    dispatchable => fothers_dispatchable,
+    unit_available => fothers_available,
+    issue => fothers_issue,
+    issue_opcode => fothers_opcode,
+    issue_operands => fothers_operands,
+    broadcast_available => cdb_available(6),
+    broadcast_tag => cdb_tag(6));
+
+  fothers_unit : fp_others
+  generic map (
+    debug_out => debug_out)
+  port map (
+    clk => clk,
+    rst => rst,
+    opcode => fothers_opcode,
+    fp_in0 => fothers_operands(0),
+    fp_in1 => fothers_operands(1),
+    fp_out => cdb_value(6));
 
   calc_commit <=
     rob_top_committable when rob_top_type = rob_type_calc else '0';
