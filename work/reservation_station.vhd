@@ -38,9 +38,9 @@ architecture behavioral of reservation_station is
   signal dispatchable_entry_id : entry_id_t := 0;
 
 
-  type broadcast_queue_t is array(0 to latency-1) of tomasulo_tag_t;
+  type broadcast_queue_t is array(0 to latency) of tomasulo_tag_t;
   signal broadcast_available_queue :
-    std_logic_vector(0 to latency-1) := (others => '0');
+    std_logic_vector(0 to latency) := (others => '0');
   signal broadcast_tag_queue : broadcast_queue_t;
 
   type entries_opcode_t is
@@ -123,8 +123,8 @@ architecture behavioral of reservation_station is
     end if;
   end function str_of_operands;
 begin
-  broadcast_available <= broadcast_available_queue(latency-1);
-  broadcast_tag <= broadcast_tag_queue(latency-1);
+  broadcast_available <= broadcast_available_queue(latency);
+  broadcast_tag <= broadcast_tag_queue(latency);
 
   dispatchable <= not entries_busy(num_entries-1);
 
@@ -274,7 +274,7 @@ begin
             ('-', (others => '-'), (others => '-')));
         end loop;
 
-        for i in 0 to latency-2 loop
+        for i in 0 to latency-1 loop
           broadcast_available_queue(i+1) <= '0';
           broadcast_tag_queue(i+1) <= (others => '-');
         end loop;
@@ -342,7 +342,7 @@ begin
           end if;
         end loop;
 
-        for i in 0 to latency-2 loop
+        for i in 0 to latency-1 loop
           broadcast_available_queue(i+1) <= broadcast_available_queue(i);
           broadcast_tag_queue(i+1) <= broadcast_tag_queue(i);
         end loop;

@@ -966,7 +966,7 @@ begin
   generic map (
     debug_out => debug_out,
     unit_name => "branch",
-    latency => 2,
+    latency => 1,
     num_entries => 2,
     num_operands => 4,
     opcode_len => 2)
@@ -1031,7 +1031,7 @@ begin
   generic map (
     debug_out => debug_out,
     unit_name => "alu",
-    latency => 1,
+    latency => 0,
     num_entries => 2,
     num_operands => 2,
     opcode_len => 4)
@@ -1073,7 +1073,7 @@ begin
   generic map (
     debug_out => debug_out,
     unit_name => "fadd",
-    latency => 3,
+    latency => 2,
     num_entries => 2,
     num_operands => 2,
     opcode_len => 2)
@@ -1117,7 +1117,7 @@ begin
   generic map (
     debug_out => debug_out,
     unit_name => "fmul",
-    latency => 3,
+    latency => 2,
     num_entries => 2,
     num_operands => 2,
     opcode_len => 2)
@@ -1161,7 +1161,7 @@ begin
   generic map (
     debug_out => debug_out,
     unit_name => "fcmp",
-    latency => 2,
+    latency => 1,
     num_entries => 2,
     num_operands => 2,
     opcode_len => 4)
