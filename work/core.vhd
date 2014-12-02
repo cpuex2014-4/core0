@@ -78,6 +78,7 @@ architecture behavioral of core is
   signal decode_branch_value : unsigned(31 downto 0);
   signal decode_predicted_branch : unsigned(31 downto 0);
   signal decode_program_counter_plus1 : unsigned(29 downto 0);
+  signal dispatch_decode_success : std_logic;
   signal decoded_instruction_available : std_logic := '0';
 
   signal decode_stall : std_logic := '0';
@@ -226,13 +227,18 @@ begin
         instruction_register_available <= '0';
         instruction_fetch_stalled <= '-';
       elsif instruction_fetch_stall /= '1' then
-        assert TO_01(program_counter, 'X')(0) /= 'X'
-          report "metavalue detected in program_counter"
-            severity failure;
-        assert not debug_out
-          report "program_counter = " & hex_of_word(program_counter&"00")
-            severity note;
-        program_counter <= instruction_predicted_branch + 1;
+        if TO_01(instruction_predicted_branch, 'X')(0) = 'X' then
+          assert not debug_out
+            report "metavalue detected in instruction_predicted_branch"
+              severity note;
+          program_counter <= (others => 'X');
+        else
+          assert not debug_out
+            report "instruction_predicted_branch = " &
+              hex_of_word(instruction_predicted_branch&"00")
+                severity note;
+          program_counter <= instruction_predicted_branch + 1;
+        end if;
         instruction_register_available <= '1';
         instruction_fetch_stalled <= '0';
       else
@@ -282,6 +288,7 @@ begin
     variable next_decode_branch_from_reg : std_logic;
     variable next_decode_branch_available : std_logic;
     variable next_decode_branch_value : unsigned(31 downto 0);
+    variable next_dispatch_decode_success : std_logic;
     variable next_decoded_instruction_available : std_logic;
   begin
     if rst = '1' then
@@ -304,6 +311,7 @@ begin
       decode_branch_value <= (others => '-');
       decode_predicted_branch <= (others => '-');
       decode_program_counter_plus1 <= (others => '-');
+      dispatch_decode_success <= '-';
       decoded_instruction_available <= '0';
     elsif rising_edge(clk) then
       if refetch = '1' then
@@ -326,6 +334,7 @@ begin
         decode_branch_value <= (others => '-');
         decode_predicted_branch <= (others => '-');
         decode_program_counter_plus1 <= (others => '-');
+        dispatch_decode_success <= '-';
         decoded_instruction_available <= '0';
       elsif instruction_register_available = '1' and decode_stall /= '1' then
         next_decode_rob_type := rob_type_calc; -- don't care
@@ -345,11 +354,15 @@ begin
         next_decode_branch_from_reg := '-';
         next_decode_branch_available := '-';
         next_decode_branch_value := (others => '-');
+        next_dispatch_decode_success := '1';
         next_decoded_instruction_available := '-';
 
-        assert TO_01(instruction_register, 'X')(0) /= 'X'
-          report "metavalue detected in instruction_register"
-            severity failure;
+        if TO_01(instruction_register, 'X')(0) = 'X' then
+          next_dispatch_decode_success := '0';
+          assert not debug_out
+            report "metavalue detected in instruction_register"
+              severity note;
+        else
         d_opcode := to_integer(instruction_register(31 downto 26));
         d_funct := to_integer(instruction_register(5 downto 0));
         d_rs := "00" & instruction_register(25 downto 21);
@@ -472,8 +485,10 @@ begin
             next_decode_branch_available := '0';
             next_decoded_instruction_available := '1';
           when others =>
-            report "unknown SPECIAL funct " & bin_of_int(d_funct,6)
-              severity failure;
+            next_dispatch_decode_success := '0';
+            assert not debug_out
+              report "unknown SPECIAL funct " & bin_of_int(d_funct,6)
+                severity note;
           end case;
         when OP_J | OP_JAL =>
           next_decode_rob_type := rob_type_calc;
@@ -617,7 +632,9 @@ begin
               next_unit_operation :=
                 to_unsigned(1, unit_operation'length);
             else
-              report "BC1: unknown condition code" severity failure;
+              next_dispatch_decode_success := '0';
+              assert not debug_out
+                report "BC1: unknown condition code" severity note;
             end if;
             next_operand0_use_immediate := '0';
             next_operand0_addr := d_cc0;
@@ -693,18 +710,39 @@ begin
                 next_decode_branch_value := program_counter_plus1 & "00";
                 next_decoded_instruction_available := '1';
             when others =>
-              report "unknown COP1.S funct " & bin_of_int(d_funct,6)
-                severity failure;
+              next_dispatch_decode_success := '0';
+              assert not debug_out
+                report "unknown COP1.S funct " & bin_of_int(d_funct,6)
+                  severity note;
             end case;
           when COP1_FMT_W =>
             case d_funct is
+              when COP1_FUNCT_CVT_S =>
+                next_decode_rob_type := rob_type_calc;
+                next_unit_id := unit_fothers;
+                next_unit_operation :=
+                  to_unsigned(2, next_unit_operation'length);
+                next_operand0_use_immediate := '0';
+                next_operand0_addr := d_fs;
+                next_operand1_use_immediate := '0';
+                next_operand1_addr := d_zero;
+                next_destination_addr := d_fd;
+                next_decode_val_from_reg := '0';
+                next_decode_branch_from_reg := '0';
+                next_decode_branch_available := '1';
+                next_decode_branch_value := program_counter_plus1 & "00";
+                next_decoded_instruction_available := '1';
             when others =>
-              report "unknown COP1.W funct " & bin_of_int(d_funct,6)
-                severity failure;
+              next_dispatch_decode_success := '0';
+              assert not debug_out
+                report "unknown COP1.W funct " & bin_of_int(d_funct,6)
+                  severity note;
             end case;
           when others =>
-            report "unknown COP1 fmt " & bin_of_int(d_fmt,5)
-              severity failure;
+            next_dispatch_decode_success := '0';
+            assert not debug_out
+              report "unknown COP1 fmt " & bin_of_int(d_fmt,5)
+                severity note;
           end case;
         when OP_LW =>
           next_decode_rob_type := rob_type_calc;
@@ -740,9 +778,25 @@ begin
           next_decode_branch_value := program_counter_plus1 & "00";
           next_decoded_instruction_available := '1';
         when others =>
-          report "unknown opcode " & bin_of_int(d_opcode,6)
-            severity failure;
+          next_dispatch_decode_success := '0';
+          assert not debug_out
+            report "unknown opcode " & bin_of_int(d_opcode,6)
+              severity note;
         end case;
+        end if;
+        if next_dispatch_decode_success /= '1' then
+          next_decode_rob_type := rob_type_calc;
+          next_unit_id := unit_none;
+          next_operand0_use_immediate := '1';
+          next_operand1_use_immediate := '1';
+          next_destination_addr := d_zero;
+          next_decode_val_from_reg := '1';
+          next_decode_val_from_reg_select := '0';
+          next_decode_branch_from_reg := '0';
+          next_decode_branch_available := '1';
+          next_decode_branch_value := program_counter_plus1 & "00";
+          next_decoded_instruction_available := '1';
+        end if;
         decode_rob_type <= next_decode_rob_type;
         unit_id <= next_unit_id;
         unit_operation <= next_unit_operation;
@@ -762,6 +816,7 @@ begin
         decode_branch_value <= next_decode_branch_value;
         decode_predicted_branch <= instruction_predicted_branch & "00";
         decode_program_counter_plus1 <= program_counter_plus1;
+        dispatch_decode_success <= next_dispatch_decode_success;
         decoded_instruction_available <= next_decoded_instruction_available;
       elsif decode_stall /= '1' then
         decode_rob_type <= rob_type_calc; -- don't care
@@ -783,6 +838,7 @@ begin
         decode_branch_value <= (others => '-');
         decode_predicted_branch <= (others => '-');
         decode_program_counter_plus1 <= (others => '-');
+        dispatch_decode_success <= '-';
         decoded_instruction_available <= '0';
       end if;
     end if;
@@ -827,6 +883,7 @@ begin
     dispatch_branch => dispatch_branch,
     dispatch_predicted_branch => decode_predicted_branch,
     dispatch_program_counter_plus1 => decode_program_counter_plus1,
+    dispatch_decode_success => dispatch_decode_success,
     rob_top_committable => rob_top_committable,
     rob_top => rob_top,
     rob_top_type => rob_top_type,

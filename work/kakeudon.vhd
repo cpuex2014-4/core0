@@ -76,6 +76,7 @@ package kakeudon is
       dispatch_branch : in value_or_tag_t;
       dispatch_predicted_branch : in unsigned(31 downto 0);
       dispatch_program_counter_plus1 : in unsigned(29 downto 0);
+      dispatch_decode_success : in std_logic;
       rob_top_committable : out std_logic;
       rob_top : out tomasulo_tag_t;
       rob_top_type : out rob_type_t;
