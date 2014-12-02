@@ -32,6 +32,7 @@ package kakeudon is
 
   component reservation_station is
     generic (
+      debug_out : boolean;
       unit_name : string;
       latency : natural;
       num_entries : natural;
@@ -58,6 +59,8 @@ package kakeudon is
   end component reservation_station;
 
   component reorder_buffer is
+    generic (
+      debug_out : boolean);
     port (
       clk : in std_logic;
       rst : in std_logic;
@@ -88,6 +91,7 @@ package kakeudon is
 
   component load_store_buffer is
     generic (
+      debug_out : boolean;
       num_stage1_entries : natural;
       num_stage2_entries : natural);
     port (
@@ -113,6 +117,8 @@ package kakeudon is
   end component load_store_buffer;
 
   component core is
+    generic (
+      debug_out : boolean);
     port (
       -- Memory Controller
       -- main read/write
@@ -134,6 +140,7 @@ package kakeudon is
   end component core;
   component cpu is
     generic (
+      debug_out : boolean;
       rs_baudrate : real;
       rs_stopbit : real);
     port (
@@ -160,6 +167,8 @@ package kakeudon is
   end component cpu;
 
   component register_file is
+    generic (
+      debug_out : boolean);
     port (
       clk : in std_logic;
       rst : in std_logic;
@@ -181,6 +190,8 @@ package kakeudon is
   end component register_file;
 
   component memory_controller is
+    generic (
+      debug_out : boolean);
     port (
       clk : in std_logic;
       -- main read/write
@@ -221,6 +232,7 @@ package kakeudon is
 
   component io_rs232c is
     generic (
+      debug_out : boolean;
       baudrate : real;
       stopbit : real);
     port (
@@ -237,6 +249,8 @@ package kakeudon is
   end component io_rs232c;
 
   component alu is
+    generic (
+      debug_out : boolean);
     port (
       alu_opcode : in unsigned(3 downto 0);
       alu_in0 : in unsigned(31 downto 0);
@@ -245,6 +259,8 @@ package kakeudon is
   end component alu;
 
   component fp_adder is
+    generic (
+      debug_out : boolean);
     port (
       clk : in std_logic;
       rst : in std_logic;
@@ -255,6 +271,8 @@ package kakeudon is
   end component fp_adder;
 
   component fp_multiplier is
+    generic (
+      debug_out : boolean);
     port (
       clk : in std_logic;
       rst : in std_logic;
@@ -265,6 +283,8 @@ package kakeudon is
   end component fp_multiplier;
 
   component fp_comparator is
+    generic (
+      debug_out : boolean);
     port (
       clk : in std_logic;
       rst : in std_logic;

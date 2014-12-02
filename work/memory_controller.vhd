@@ -7,6 +7,8 @@ use work.serial.all;
 use work.kakeudon.all;
 
 entity memory_controller is
+  generic (
+    debug_out : boolean);
   port (
     clk : in std_logic;
     -- main read/write
@@ -46,8 +48,6 @@ entity memory_controller is
 end entity memory_controller;
 
 architecture behavioral of memory_controller is
-  constant debug_out : boolean := true;
-
   type instruction_memory_t is
     array(0 to 32767) of unsigned(31 downto 0);
   signal instruction_memory : instruction_memory_t;

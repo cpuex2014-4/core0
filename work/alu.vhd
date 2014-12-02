@@ -7,6 +7,8 @@ use work.serial.all;
 use work.kakeudon.all;
 
 entity alu is
+  generic (
+    debug_out : boolean);
   port (
     alu_opcode : in unsigned(3 downto 0);
     alu_in0 : in unsigned(31 downto 0);

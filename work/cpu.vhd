@@ -8,6 +8,7 @@ use work.kakeudon.all;
 
 entity cpu is
   generic (
+    debug_out : boolean;
     rs_baudrate : real;
     rs_stopbit : real);
   port (
@@ -55,6 +56,8 @@ architecture behavioral of cpu is
   signal rs232c_send_push : std_logic;
 begin
   core_unit : core
+  generic map (
+    debug_out => debug_out)
   port map (
     mem_enable => mem_enable,
     mem_isstore => mem_isstore,
@@ -71,6 +74,8 @@ begin
     rst => rst);
 
   mem : memory_controller
+  generic map (
+    debug_out => debug_out)
   port map (
     clk => clk,
     enable => mem_enable,
@@ -108,6 +113,7 @@ begin
 
   rs232c_unit : io_rs232c
   generic map (
+    debug_out => debug_out,
     baudrate => rs_baudrate,
     stopbit => rs_stopbit)
   port map (

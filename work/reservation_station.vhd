@@ -7,6 +7,7 @@ use work.kakeudon.all;
 
 entity reservation_station is
   generic (
+    debug_out : boolean;
     unit_name : string;
     latency : natural;
     num_entries : natural;
@@ -33,8 +34,6 @@ entity reservation_station is
 end entity reservation_station;
 
 architecture behavioral of reservation_station is
-  constant debug_out : boolean := true;
-
   subtype entry_id_t is integer range 0 to num_entries-1;
   signal dispatchable_entry_id : entry_id_t := 0;
 

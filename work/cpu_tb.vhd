@@ -101,6 +101,7 @@ begin
 
   cpu_unit : cpu
   generic map (
+    debug_out => false,
     rs_baudrate => test_baudrate,
     rs_stopbit => test_stopbit)
   port map (

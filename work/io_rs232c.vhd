@@ -8,6 +8,7 @@ use work.kakeudon.all;
 
 entity io_rs232c is
   generic (
+    debug_out : boolean;
     baudrate : real;
     stopbit : real);
   port (

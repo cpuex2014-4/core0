@@ -7,6 +7,8 @@ use work.serial.all;
 use work.kakeudon.all;
 
 entity register_file is
+  generic (
+    debug_out : boolean);
   port (
     clk : in std_logic;
     rst : in std_logic;
@@ -28,7 +30,6 @@ entity register_file is
 end entity register_file;
 
 architecture behavioral of register_file is
-  constant debug_out : boolean := true;
   constant num_entries : natural := 128;
   type reg_t is array(0 to num_entries-1) of value_or_tag_t;
   signal reg : reg_t := (others =>

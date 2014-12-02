@@ -7,6 +7,8 @@ use work.serial.all;
 use work.kakeudon.all;
 
 entity fp_comparator is
+  generic (
+    debug_out : boolean);
   port (
     clk : in std_logic;
     rst : in std_logic;

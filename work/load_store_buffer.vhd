@@ -7,6 +7,7 @@ use work.kakeudon.all;
 
 entity load_store_buffer is
   generic (
+    debug_out : boolean;
     num_stage1_entries : natural;
     num_stage2_entries : natural);
   port (
@@ -32,8 +33,6 @@ entity load_store_buffer is
 end entity load_store_buffer;
 
 architecture behavioral of load_store_buffer is
-  constant debug_out : boolean := true;
-
   type stage1_entries_tag_t is
     array(0 to num_stage1_entries-1) of tomasulo_tag_t;
   type stage1_entries_word_t is

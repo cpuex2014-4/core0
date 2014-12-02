@@ -7,6 +7,8 @@ use work.serial.all;
 use work.kakeudon.all;
 
 entity reorder_buffer is
+  generic (
+    debug_out : boolean);
   port (
     clk : in std_logic;
     rst : in std_logic;
@@ -36,7 +38,6 @@ entity reorder_buffer is
 end entity reorder_buffer;
 
 architecture behavioral of reorder_buffer is
-  constant debug_out : boolean := true;
   constant num_entries : natural := 16;
 
   signal rob_start : tomasulo_tag_t := (others => '0');

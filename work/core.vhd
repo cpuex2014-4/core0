@@ -8,6 +8,8 @@ use work.serial.all;
 use work.kakeudon.all;
 
 entity core is
+  generic (
+    debug_out : boolean);
   port (
     -- main read/write
     mem_enable : out std_logic;
@@ -28,8 +30,6 @@ entity core is
 end entity core;
 
 architecture behavioral of core is
-  constant debug_instruction_fetch : boolean := true;
-  constant debug_cdb : boolean := true;
   constant disable_branch_prediction : boolean := false;
 
   signal cdb_available : std_logic_vector(0 to cdb_size-1);
@@ -216,7 +216,7 @@ begin
         assert refetch_address(1 downto 0) = "00"
           report "refetch_address(1 downto 0) is not 00"
             severity failure;
-        assert not debug_instruction_fetch
+        assert not debug_out
           report "refetch; address is " & hex_of_word(refetch_address)
             severity note;
         program_counter <= refetch_address(31 downto 2);
@@ -226,7 +226,7 @@ begin
         assert TO_01(program_counter, 'X')(0) /= 'X'
           report "metavalue detected in program_counter"
             severity failure;
-        assert not debug_instruction_fetch
+        assert not debug_out
           report "program_counter = " & hex_of_word(program_counter&"00")
             severity note;
         program_counter <= instruction_predicted_branch + 1;
@@ -803,6 +803,8 @@ begin
     ('0', (others => '-'), rob_bottom);
 
   rob : reorder_buffer
+  generic map (
+    debug_out => debug_out)
   port map (
     clk => clk,
     rst => rst,
@@ -880,6 +882,8 @@ begin
     dispatch_rob_val.tag;
 
   reg : register_file
+  generic map (
+    debug_out => debug_out)
   port map (
     clk => clk,
     rst => rst,
@@ -906,6 +910,7 @@ begin
 
   ls_buffer_unit : load_store_buffer
   generic map (
+    debug_out => debug_out,
     num_stage1_entries => 2,
     num_stage2_entries => 2)
   port map (
@@ -959,6 +964,7 @@ begin
 
   branch_reservation_station : reservation_station
   generic map (
+    debug_out => debug_out,
     unit_name => "branch",
     latency => 2,
     num_entries => 2,
@@ -1023,6 +1029,7 @@ begin
 
   alu_reservation_station : reservation_station
   generic map (
+    debug_out => debug_out,
     unit_name => "alu",
     latency => 1,
     num_entries => 2,
@@ -1048,6 +1055,8 @@ begin
     broadcast_tag => cdb_tag(2));
 
   alu_unit : alu
+  generic map (
+    debug_out => debug_out)
   port map (
     alu_opcode => alu_opcode,
     alu_in0 => alu_operands(0),
@@ -1062,6 +1071,7 @@ begin
 
   fadd_reservation_station : reservation_station
   generic map (
+    debug_out => debug_out,
     unit_name => "fadd",
     latency => 3,
     num_entries => 2,
@@ -1087,6 +1097,8 @@ begin
     broadcast_tag => cdb_tag(3));
 
   fadd_unit : fp_adder
+  generic map (
+    debug_out => debug_out)
   port map (
     clk => clk,
     rst => rst,
@@ -1103,6 +1115,7 @@ begin
 
   fmul_reservation_station : reservation_station
   generic map (
+    debug_out => debug_out,
     unit_name => "fmul",
     latency => 3,
     num_entries => 2,
@@ -1128,6 +1141,8 @@ begin
     broadcast_tag => cdb_tag(4));
 
   fmul_unit : fp_multiplier
+  generic map (
+    debug_out => debug_out)
   port map (
     clk => clk,
     rst => rst,
@@ -1144,6 +1159,7 @@ begin
 
   fcmp_reservation_station : reservation_station
   generic map (
+    debug_out => debug_out,
     unit_name => "fcmp",
     latency => 2,
     num_entries => 2,
@@ -1169,6 +1185,8 @@ begin
     broadcast_tag => cdb_tag(5));
 
   fcmp_unit : fp_comparator
+  generic map (
+    debug_out => debug_out)
   port map (
     clk => clk,
     rst => rst,
@@ -1198,7 +1216,7 @@ begin
             report "metavalue detected in cdb_tag(" &
               integer'image(i) & ")"
                 severity failure;
-          assert not debug_cdb
+          assert not debug_out
             report "CDB(id " & integer'image(i) &
                    ", tag " & integer'image(to_integer(cdb_tag(i))) &
                    ") <- " & hex_of_word(cdb_value(i))
