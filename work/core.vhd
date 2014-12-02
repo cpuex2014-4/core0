@@ -797,7 +797,7 @@ begin
   dispatch_branch <=
     ('X', (others => 'X'), (others => 'X'))
       when TO_X01(decode_branch_from_reg) = 'X' else
-    dispatch_operand0_reg when decode_branch_from_reg = '1' else
+    dispatch_operand0 when decode_branch_from_reg = '1' else
     ('1', decode_branch_value, (others => '-'))
       when decode_branch_available = '1' else
     ('0', (others => '-'), rob_bottom);
