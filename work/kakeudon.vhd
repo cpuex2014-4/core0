@@ -252,6 +252,8 @@ package kakeudon is
     generic (
       debug_out : boolean);
     port (
+      clk : in std_logic;
+      rst : in std_logic;
       alu_opcode : in unsigned(3 downto 0);
       alu_in0 : in unsigned(31 downto 0);
       alu_in1 : in unsigned(31 downto 0);

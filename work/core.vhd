@@ -1031,7 +1031,7 @@ begin
   generic map (
     debug_out => debug_out,
     unit_name => "alu",
-    latency => 0,
+    latency => 1,
     num_entries => 2,
     num_operands => 2,
     opcode_len => 4)
@@ -1058,6 +1058,8 @@ begin
   generic map (
     debug_out => debug_out)
   port map (
+    clk => clk,
+    rst => rst,
     alu_opcode => alu_opcode,
     alu_in0 => alu_operands(0),
     alu_in1 => alu_operands(1),
