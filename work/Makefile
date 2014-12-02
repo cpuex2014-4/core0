@@ -14,6 +14,8 @@ GHDL_SIM_OPT = --stop-time=500ms
 
 all: $(TESTBENCHES)
 
+test: run_cpu_tb
+
 $(TESTBENCHES): work-obj93.cf $(SOURCES)
 	$(GHDLC) -m $(GHDLFLAGS) $@
 
