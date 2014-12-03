@@ -574,7 +574,15 @@ begin
           next_operand0_use_immediate := '0';
           next_operand0_addr := d_rs;
           next_operand1_use_immediate := '1';
-          next_operand1_immediate_val := d_sign_ext_imm;
+          if d_opcode = OP_ADDI or d_opcode = OP_ADDIU or
+             d_opcode = OP_SLTI or d_opcode = OP_SLTIU then
+            next_operand1_immediate_val := d_sign_ext_imm;
+          elsif d_opcode = OP_ANDI or d_opcode = OP_ORI or
+                d_opcode = OP_XORI then
+            next_operand1_immediate_val := d_zero_ext_imm;
+          else
+            assert false severity failure;
+          end if;
           next_destination_addr := d_rt;
           next_decode_val_from_reg := '0';
           next_decode_branch_from_reg := '0';
