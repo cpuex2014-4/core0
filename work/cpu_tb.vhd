@@ -13,6 +13,7 @@ end entity cpu_tb;
 architecture behavioral of cpu_tb is
   constant clk_freq : real := 66.666e6;
   constant test_baudrate : real := 4000000.0;
+  constant bypass_io : boolean := true;
   constant test_stopbit : real := 1.0;
   signal simclk : std_logic;
   signal txd : std_logic := '1';
@@ -51,6 +52,9 @@ begin
   -- rxd <= transport rxd1 after 10 ns;
   rxd <= rxd1;
   txd <= txd1;
+
+  non_bypass_io : if not bypass_io generate
+
   rdf : process(simclk)
     variable read_byte : integer;
     variable send_go_v : std_logic;
@@ -80,6 +84,8 @@ begin
     end if;
   end process wrf;
 
+  end generate non_bypass_io;
+
   rdwr : rs232c
   generic map (
     clk_freq => clk_freq,
@@ -103,6 +109,7 @@ begin
   generic map (
     debug_out => false,
     debug_out_commit => true,
+    bypass_io => bypass_io,
     rs_baudrate => test_baudrate,
     rs_stopbit => test_stopbit)
   port map (

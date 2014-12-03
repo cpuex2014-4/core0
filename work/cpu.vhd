@@ -10,6 +10,7 @@ entity cpu is
   generic (
     debug_out : boolean;
     debug_out_commit : boolean;
+    bypass_io : boolean;
     rs_baudrate : real;
     rs_stopbit : real);
   port (
@@ -114,21 +115,72 @@ begin
     rs232c_send_bottom => rs232c_send_bottom,
     rs232c_send_push => rs232c_send_push);
 
-  rs232c_unit : io_rs232c
-  generic map (
-    debug_out => debug_out,
-    baudrate => rs_baudrate,
-    stopbit => rs_stopbit)
-  port map (
-    clk => clk,
-    rst => rst,
-    RS_RX => RS_RX,
-    RS_TX => RS_TX,
-    recv_empty => rs232c_recv_empty,
-    recv_top => rs232c_recv_top,
-    recv_consume => rs232c_recv_consume,
-    send_full => rs232c_send_full,
-    send_bottom => rs232c_send_bottom,
-    send_push => rs232c_send_push);
+  non_bypass_io : if not bypass_io generate
+    rs232c_unit : io_rs232c
+    generic map (
+      debug_out => debug_out,
+      baudrate => rs_baudrate,
+      stopbit => rs_stopbit)
+    port map (
+      clk => clk,
+      rst => rst,
+      RS_RX => RS_RX,
+      RS_TX => RS_TX,
+      recv_empty => rs232c_recv_empty,
+      recv_top => rs232c_recv_top,
+      recv_consume => rs232c_recv_consume,
+      send_full => rs232c_send_full,
+      send_bottom => rs232c_send_bottom,
+      send_push => rs232c_send_push);
+  end generate non_bypass_io;
+
+  bypassing_io : if bypass_io generate
+    recv_into_fifo : process(clk, rst)
+      type t_char_file is file of character;
+      file read_file : t_char_file open read_mode is "in.dat";
+      variable init : boolean := false;
+      variable rdend : boolean := false;
+      variable ch : character;
+    begin
+      if not init then
+        init := true;
+        if endfile(read_file) then
+          rdend := true;
+        else
+          read(read_file, ch);
+        end if;
+      end if;
+      if rst = '1' then
+      elsif rising_edge(clk) then
+        if not rdend and rs232c_recv_consume = '1' then
+          if endfile(read_file) then
+            rdend := true;
+          else
+            read(read_file, ch);
+          end if;
+        end if;
+      end if;
+      if rdend then
+        rs232c_recv_empty <= '1';
+        rs232c_recv_top <= (others => 'X');
+      else
+        rs232c_recv_empty <= '0';
+        rs232c_recv_top <= to_unsigned(character'pos(ch), 8);
+      end if;
+    end process recv_into_fifo;
+
+    send_from_fifo : process(clk, rst)
+      type t_char_file is file of character;
+      file write_file : t_char_file open write_mode is "out.dat";
+    begin
+      if rst = '1' then
+      elsif rising_edge(clk) then
+        if rs232c_send_push = '1' then
+          write(write_file, character'val(to_integer(rs232c_send_bottom)));
+        end if;
+      end if;
+      rs232c_send_full <= '0';
+    end process send_from_fifo;
+  end generate bypassing_io;
 end behavioral;
 

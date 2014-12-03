@@ -146,6 +146,7 @@ package kakeudon is
     generic (
       debug_out : boolean;
       debug_out_commit : boolean;
+      bypass_io : boolean;
       rs_baudrate : real;
       rs_stopbit : real);
     port (
