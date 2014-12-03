@@ -138,7 +138,10 @@ begin
         else
           assert TO_01(addr,'X')(0) /= 'X'
             report "metavalue detected in addr"
-              severity warning;
+              severity failure;
+          assert TO_01(data_write,'X')(0) /= 'X'
+            report "metavalue detected in data_write"
+              severity failure;
           assert not debug_out_commit
             report "Memory[" & hex_of_word(addr&"00") & "] <- " &
               hex_of_word(data_write)
