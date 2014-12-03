@@ -122,7 +122,8 @@ package kakeudon is
   component core is
     generic (
       debug_out : boolean;
-      debug_out_commit : boolean);
+      debug_out_commit : boolean;
+      bypass_program_loading : boolean);
     port (
       -- Memory Controller
       -- main read/write
@@ -149,6 +150,7 @@ package kakeudon is
       debug_out : boolean;
       debug_out_commit : boolean;
       bypass_io : boolean;
+      bypass_program_loading : boolean;
       rs_baudrate : real;
       rs_stopbit : real);
     port (
@@ -201,7 +203,8 @@ package kakeudon is
   component memory_controller is
     generic (
       debug_out : boolean;
-      debug_out_commit : boolean);
+      debug_out_commit : boolean;
+      bypass_program_loading : boolean);
     port (
       clk : in std_logic;
       -- main read/write

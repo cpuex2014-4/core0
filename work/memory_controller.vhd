@@ -9,7 +9,8 @@ use work.kakeudon.all;
 entity memory_controller is
   generic (
     debug_out : boolean;
-    debug_out_commit : boolean);
+    debug_out_commit : boolean;
+    bypass_program_loading : boolean);
   port (
     clk : in std_logic;
     -- main read/write
@@ -74,6 +75,10 @@ architecture behavioral of memory_controller is
   signal isstore_delay2 : std_logic;
   signal data_write_delay1 : unsigned(31 downto 0);
   signal data_write_delay2 : unsigned(31 downto 0);
+
+  signal instruction_memory_to_bypass : instruction_memory_t;
+  signal instruction_memory_to_bypass_available : boolean := false;
+  signal instruction_memory_to_bypass_used : boolean := false;
 begin
   XE1 <= '0';
   E2A <= '1';
@@ -97,12 +102,19 @@ begin
     non_sram_data_delay2;
   tag_read <= tag_delay2;
   XWA <= not (isstore and enable);
-  sequential: process(clk)
+  sequential: process(instruction_memory_to_bypass_available, clk)
     variable next_rs232c_recv_consume : std_logic;
     variable next_rs232c_send_push : std_logic;
     variable next_rs232c_send_bottom : unsigned(7 downto 0);
     variable next_isstore_delay1 : std_logic;
   begin
+    if bypass_program_loading then
+      if instruction_memory_to_bypass_available and
+         not instruction_memory_to_bypass_used then
+        instruction_memory <= instruction_memory_to_bypass;
+        instruction_memory_to_bypass_used <= true;
+      end if;
+    end if;
     if rising_edge(clk) then
       next_rs232c_recv_consume := '0';
       next_rs232c_send_push := '0';
@@ -114,6 +126,11 @@ begin
           if TO_01(addr,'X')(0) = 'X' then
             read_data_from_sram_delay1 <= 'X';
             non_sram_data_delay1 <= (others => '-');
+          elsif bypass_program_loading and
+                addr(26 downto 15) = "000000000000" then
+            read_data_from_sram_delay1 <= '0';
+            non_sram_data_delay1 <=
+              instruction_memory(to_integer(addr(14 downto 0)));
           elsif addr(29 downto 20) = "0000000000" then
             read_data_from_sram_delay1 <= '1';
             non_sram_data_delay1 <= (others => '-');
@@ -218,5 +235,41 @@ begin
     inst_data_0 when instruction_source = "00" else
     inst_data_1 when instruction_source = "01" else
     (others => '0');
+
+  bypassing_program_loading : if bypass_program_loading generate
+    foo: process
+      type t_char_file is file of character;
+      file read_file : t_char_file open read_mode is "in.dat";
+      variable ch0, ch1, ch2, ch3 : character;
+      variable w : unsigned(31 downto 0);
+      variable b : boolean;
+      variable i : integer;
+    begin
+      b := true;
+      i := 0;
+      while b loop
+        read(read_file, ch0);
+        read(read_file, ch1);
+        read(read_file, ch2);
+        read(read_file, ch3);
+        w := to_unsigned(character'pos(ch0), 8) &
+             to_unsigned(character'pos(ch1), 8) &
+             to_unsigned(character'pos(ch2), 8) &
+             to_unsigned(character'pos(ch3), 8);
+        if w = x"FFFFFFFF" then
+          b := false;
+        else
+          instruction_memory_to_bypass(i) <= w;
+          i := i + 1;
+        end if;
+      end loop;
+      for j in 1 to 32 loop
+        instruction_memory_to_bypass(i) <= x"00000000";
+        i := i + 1;
+      end loop;
+      instruction_memory_to_bypass_available <= true;
+      wait;
+    end process foo;
+  end generate bypassing_program_loading;
 end architecture behavioral;
 

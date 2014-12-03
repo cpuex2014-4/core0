@@ -14,6 +14,7 @@ architecture behavioral of cpu_tb is
   constant clk_freq : real := 66.666e6;
   constant test_baudrate : real := 4000000.0;
   constant bypass_io : boolean := true;
+  constant bypass_program_loading : boolean := true;
   constant test_stopbit : real := 1.0;
   signal simclk : std_logic;
   signal txd : std_logic := '1';
@@ -55,11 +56,27 @@ begin
 
   non_bypass_io : if not bypass_io generate
 
+
   rdf : process(simclk)
     variable read_byte : integer;
     variable send_go_v : std_logic;
     variable ch : character;
+    variable bypass_program_loading_memo : boolean
+      := bypass_program_loading;
+    variable ch0, ch1, ch2, ch3 : character;
   begin
+    while bypass_program_loading_memo loop
+      read(read_file, ch0);
+      read(read_file, ch1);
+      read(read_file, ch2);
+      read(read_file, ch3);
+      if to_unsigned(character'pos(ch0), 8) &
+         to_unsigned(character'pos(ch1), 8) &
+         to_unsigned(character'pos(ch2), 8) &
+         to_unsigned(character'pos(ch3), 8) = x"FFFFFFFF" then
+        bypass_program_loading_memo := false;
+      end if;
+    end loop;
     if rising_edge(simclk) then
       send_go_v := '0';
       if send_busy /= '1' and not endfile(read_file) then
@@ -110,6 +127,7 @@ begin
     debug_out => false,
     debug_out_commit => true,
     bypass_io => bypass_io,
+    bypass_program_loading => bypass_program_loading,
     rs_baudrate => test_baudrate,
     rs_stopbit => test_stopbit)
   port map (

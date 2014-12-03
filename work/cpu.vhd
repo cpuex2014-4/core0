@@ -11,6 +11,7 @@ entity cpu is
     debug_out : boolean;
     debug_out_commit : boolean;
     bypass_io : boolean;
+    bypass_program_loading : boolean;
     rs_baudrate : real;
     rs_stopbit : real);
   port (
@@ -61,7 +62,8 @@ begin
   core_unit : core
   generic map (
     debug_out => debug_out,
-    debug_out_commit => debug_out_commit)
+    debug_out_commit => debug_out_commit,
+    bypass_program_loading => bypass_program_loading)
   port map (
     mem_enable => mem_enable,
     mem_isstore => mem_isstore,
@@ -81,7 +83,8 @@ begin
   mem : memory_controller
   generic map (
     debug_out => debug_out,
-    debug_out_commit => debug_out_commit)
+    debug_out_commit => debug_out_commit,
+    bypass_program_loading => bypass_program_loading)
   port map (
     clk => clk,
     enable => mem_enable,
@@ -144,7 +147,22 @@ begin
       variable init : boolean := false;
       variable rdend : boolean := false;
       variable ch : character;
+      variable bypass_program_loading_memo : boolean
+        := bypass_program_loading;
+      variable ch0, ch1, ch2, ch3 : character;
     begin
+      while bypass_program_loading_memo loop
+        read(read_file, ch0);
+        read(read_file, ch1);
+        read(read_file, ch2);
+        read(read_file, ch3);
+        if to_unsigned(character'pos(ch0), 8) &
+           to_unsigned(character'pos(ch1), 8) &
+           to_unsigned(character'pos(ch2), 8) &
+           to_unsigned(character'pos(ch3), 8) = x"FFFFFFFF" then
+          bypass_program_loading_memo := false;
+        end if;
+      end loop;
       if not init then
         init := true;
         if endfile(read_file) then

@@ -89,6 +89,7 @@ begin
     debug_out => false,
     debug_out_commit => false,
     bypass_io => false,
+    bypass_program_loading => false,
     rs_baudrate => 460800.0,
     rs_stopbit => 1.0)
   port map (

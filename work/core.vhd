@@ -10,7 +10,8 @@ use work.kakeudon.all;
 entity core is
   generic (
     debug_out : boolean;
-    debug_out_commit : boolean);
+    debug_out_commit : boolean;
+    bypass_program_loading : boolean);
   port (
     -- main read/write
     mem_enable : out std_logic;
@@ -216,7 +217,11 @@ begin
   instruction_fetch_sequential : process(clk, rst)
   begin
     if rst = '1' then
-      program_counter <= initial_program_counter(31 downto 2);
+      if bypass_program_loading then
+        program_counter <= (others => '0');
+      else
+        program_counter <= initial_program_counter(31 downto 2);
+      end if;
       instruction_register_available <= '0';
     elsif rising_edge(clk) then
       assert TO_X01(refetch) /= 'X'
