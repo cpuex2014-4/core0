@@ -135,6 +135,8 @@ package kakeudon is
       mem_avail_read : in std_logic;
       mem_data_read : in unsigned(31 downto 0);
       mem_tag_read : in tomasulo_tag_t;
+      -- memory refetch
+      mem_refetch : out std_logic;
       -- instruction
       mem_inst_addr : out unsigned(29 downto 0);
       mem_inst_data : in unsigned(31 downto 0);
@@ -212,6 +214,8 @@ package kakeudon is
       avail_read : out std_logic;
       data_read : out unsigned(31 downto 0);
       tag_read : out tomasulo_tag_t;
+      -- refetch
+      refetch : in std_logic;
       -- instruction
       inst_addr : in unsigned(29 downto 0);
       inst_data : out unsigned(31 downto 0);

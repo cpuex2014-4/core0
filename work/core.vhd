@@ -22,6 +22,8 @@ entity core is
     mem_avail_read : in std_logic;
     mem_data_read : in unsigned(31 downto 0);
     mem_tag_read : in tomasulo_tag_t;
+    -- memory refetch
+    mem_refetch : out std_logic;
     -- instruction
     mem_inst_addr : out unsigned(29 downto 0);
     mem_inst_data : in unsigned(31 downto 0);
@@ -1049,11 +1051,12 @@ begin
       cdb_value(0) <= (others => '-');
       cdb_tag(0) <= (others => '-');
     elsif rising_edge(clk) then
-      cdb_available(0) <= mem_avail_read;
+      cdb_available(0) <= mem_avail_read and not refetch;
       cdb_value(0) <= mem_data_read;
       cdb_tag(0) <= mem_tag_read;
     end if;
   end process recv_data_from_memory;
+  mem_refetch <= refetch;
 
   branch_dispatch <=
     branch_dispatchable when

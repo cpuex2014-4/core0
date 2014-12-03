@@ -22,6 +22,8 @@ entity memory_controller is
     avail_read : out std_logic;
     data_read : out unsigned(31 downto 0);
     tag_read : out tomasulo_tag_t;
+    -- refetch
+    refetch : in std_logic;
     -- instruction
     inst_addr : in unsigned(29 downto 0);
     inst_data : out unsigned(31 downto 0);
@@ -157,8 +159,8 @@ begin
         end if;
       end if;
 
-      read_enable_delay1 <= not isstore and enable;
-      read_enable_delay2 <= read_enable_delay1;
+      read_enable_delay1 <= not isstore and enable and not refetch;
+      read_enable_delay2 <= read_enable_delay1 and not refetch;
       tag_delay1 <= tag;
       tag_delay2 <= tag_delay1;
       isstore_delay1 <= next_isstore_delay1;

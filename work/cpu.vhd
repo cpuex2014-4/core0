@@ -47,6 +47,7 @@ architecture behavioral of cpu is
   signal mem_avail_read : std_logic;
   signal mem_data_read : unsigned(31 downto 0);
   signal mem_tag_read : tomasulo_tag_t;
+  signal mem_refetch : std_logic;
   signal mem_inst_addr : unsigned(29 downto 0);
   signal mem_inst_data : unsigned(31 downto 0);
 
@@ -71,6 +72,7 @@ begin
     mem_avail_read => mem_avail_read,
     mem_data_read => mem_data_read,
     mem_tag_read => mem_tag_read,
+    mem_refetch => mem_refetch,
     mem_inst_addr => mem_inst_addr,
     mem_inst_data => mem_inst_data,
     clk => clk,
@@ -91,6 +93,7 @@ begin
     avail_read => mem_avail_read,
     data_read => mem_data_read,
     tag_read => mem_tag_read,
+    refetch => mem_refetch,
     inst_addr => mem_inst_addr,
     inst_data => mem_inst_data,
     ZD => ZD,
