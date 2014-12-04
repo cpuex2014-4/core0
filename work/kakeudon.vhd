@@ -340,8 +340,8 @@ package kakeudon is
   constant OP_COP1    : opcode_t := 2#010001#;
   constant OP_LW      : opcode_t := 2#100011#;
   constant OP_SW      : opcode_t := 2#101011#;
-  constant OP_RRB     : opcode_t := 2#011100#;
-  constant OP_RSB     : opcode_t := 2#011101#;
+  constant OP_LWC1    : opcode_t := 2#110001#;
+  constant OP_SWC1    : opcode_t := 2#111001#;
 
   subtype funct_t is integer range 0 to 63;
   constant FUNCT_SLL  : funct_t := 2#000000#;

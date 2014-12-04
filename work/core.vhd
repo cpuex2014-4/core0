@@ -784,7 +784,7 @@ begin
               report "unknown COP1 fmt " & bin_of_int(d_fmt,5)
                 severity note;
           end case;
-        when OP_LW =>
+        when OP_LW | OP_LWC1 =>
           next_decode_rob_type := rob_type_calc;
           next_unit_id := unit_mem;
           next_unit_operation :=
@@ -794,13 +794,19 @@ begin
           next_operand1_use_immediate := '1';
           next_operand1_immediate_val := (others => '-');
           next_operand2_immediate_val := d_sign_ext_imm;
-          next_destination_addr := d_rt;
+          if d_opcode = OP_LW then
+            next_destination_addr := d_rt;
+          elsif d_opcode = OP_LWC1 then
+            next_destination_addr := d_ft;
+          else
+            assert false severity failure;
+          end if;
           next_decode_val_from_reg := '0';
           next_decode_branch_from_reg := '0';
           next_decode_branch_available := '1';
           next_decode_branch_value := program_counter_plus1 & "00";
           next_decoded_instruction_available := '1';
-        when OP_SW =>
+        when OP_SW | OP_SWC1 =>
           next_decode_rob_type := rob_type_store;
           next_unit_id := unit_mem;
           next_unit_operation :=
@@ -808,7 +814,13 @@ begin
           next_operand0_use_immediate := '0';
           next_operand0_addr := d_rs;
           next_operand1_use_immediate := '0';
-          next_operand1_addr := d_rt;
+          if d_opcode = OP_SW then
+            next_operand1_addr := d_rt;
+          elsif d_opcode = OP_SWC1 then
+            next_operand1_addr := d_ft;
+          else
+            assert false severity failure;
+          end if;
           next_operand2_immediate_val := d_sign_ext_imm;
           next_destination_addr := d_zero;
           next_decode_val_from_reg := '1';
