@@ -25,6 +25,7 @@ entity reorder_buffer is
     dispatch_predicted_branch : in unsigned(31 downto 0);
     dispatch_program_counter_plus1 : in unsigned(29 downto 0);
     dispatch_decode_success : in std_logic;
+    dispatch_rasp : in rasp_t;
     rob_top_committable : out std_logic;
     rob_top : out tomasulo_tag_t;
     rob_top_type : out rob_type_t;
@@ -32,6 +33,7 @@ entity reorder_buffer is
     rob_top_val : out value_or_tag_t;
     refetch : out std_logic;
     refetch_address : out unsigned(31 downto 0);
+    refetch_rasp : out rasp_t;
     rob_bottom : out tomasulo_tag_t;
     rob_rd0_reg_tag : in tomasulo_tag_t;
     rob_rd0 : out value_or_tag_t;
@@ -52,6 +54,7 @@ architecture behavioral of reorder_buffer is
   type rob_entries_word_t is array(0 to num_entries-1) of unsigned_word;
   type rob_entries_value_or_tag_t is
     array(0 to num_entries-1) of value_or_tag_t;
+  type rob_entries_rasp_t is array(0 to num_entries-1) of rasp_t;
 
   signal rob_entries_busy : std_logic_vector(0 to num_entries-1)
     := (others => '0');
@@ -63,6 +66,7 @@ architecture behavioral of reorder_buffer is
   signal rob_entries_predicted_branch : rob_entries_word_t;
   signal rob_entries_program_counter_plus1 : rob_entries_word_t;
   signal rob_entries_decode_success : std_logic_vector(0 to num_entries-1);
+  signal rob_entries_rasp : rob_entries_rasp_t;
 
   signal internal_rob_top_committable : std_logic;
   signal internal_refetch : std_logic;
@@ -89,6 +93,7 @@ begin
       rob_entries_branch(to_integer(rob_start)).value /=
       rob_entries_predicted_branch(to_integer(rob_start)) else '0';
   refetch_address <= rob_entries_branch(to_integer(rob_start)).value;
+  refetch_rasp <= rob_entries_rasp(to_integer(rob_start));
   dispatchable <= not rob_entries_busy(to_integer(rob_end));
 
   rob_rd0 <=
@@ -149,6 +154,8 @@ begin
             dispatch_program_counter_plus1&"00";
           rob_entries_decode_success(to_integer(rob_end)) <=
             dispatch_decode_success;
+          rob_entries_rasp(to_integer(rob_end)) <=
+            dispatch_rasp;
 
           assert not debug_out
             report
@@ -161,7 +168,9 @@ begin
                 "pc+4 = " &
                   hex_of_word(dispatch_program_counter_plus1&"00") & ", " &
                 "decode_success = " &
-                  std_ulogic'image(dispatch_decode_success) & ")"
+                  std_ulogic'image(dispatch_decode_success) & ", " &
+                "rasp = " &
+                  dec_of_unsigned(dispatch_rasp) & ")"
               severity note;
 
           rob_end <= rob_end + 1;

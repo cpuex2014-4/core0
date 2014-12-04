@@ -19,6 +19,8 @@ package kakeudon is
 
   type rob_type_t is (rob_type_store, rob_type_calc);
 
+  subtype rasp_t is unsigned(4 downto 0);
+
   type value_or_tag_t is record
     available : std_logic;
     value : unsigned(31 downto 0);
@@ -77,6 +79,7 @@ package kakeudon is
       dispatch_predicted_branch : in unsigned(31 downto 0);
       dispatch_program_counter_plus1 : in unsigned(29 downto 0);
       dispatch_decode_success : in std_logic;
+      dispatch_rasp : in rasp_t;
       rob_top_committable : out std_logic;
       rob_top : out tomasulo_tag_t;
       rob_top_type : out rob_type_t;
@@ -84,6 +87,7 @@ package kakeudon is
       rob_top_val : out value_or_tag_t;
       refetch : out std_logic;
       refetch_address : out unsigned(31 downto 0);
+      refetch_rasp : out rasp_t;
       rob_bottom : out tomasulo_tag_t;
       rob_rd0_reg_tag : in tomasulo_tag_t;
       rob_rd0 : out value_or_tag_t;

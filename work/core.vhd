@@ -45,6 +45,14 @@ architecture behavioral of core is
 
   signal refetch : std_logic;
   signal refetch_address : unsigned(31 downto 0);
+  signal refetch_rasp : rasp_t;
+
+  signal ra_stack : unsigned_word_array_t(0 to 31)
+    := (others => (others => '0'));
+  signal bp_rasp : rasp_t := (others => '0');
+  signal bp_ras_push : std_logic;
+  signal bp_ras_push_addr : unsigned(31 downto 0);
+  signal bp_ras_pop : std_logic;
 
   -- instruction fetch
   signal program_counter_plus1 : unsigned(29 downto 0)
@@ -55,6 +63,7 @@ architecture behavioral of core is
   signal instruction_predicted_branch : unsigned(29 downto 0)
     := initial_program_counter(31 downto 2);
   signal instruction_register_available : std_logic := '0';
+  signal if_rasp : rasp_t;
 
   signal instruction_fetch_stall : std_logic := '0';
 
@@ -82,6 +91,7 @@ architecture behavioral of core is
   signal decode_predicted_branch : unsigned(31 downto 0);
   signal decode_program_counter_plus1 : unsigned(29 downto 0);
   signal dispatch_decode_success : std_logic;
+  signal dispatch_rasp : rasp_t;
   signal decoded_instruction_available : std_logic := '0';
 
   signal decode_stall : std_logic := '0';
@@ -179,11 +189,18 @@ begin
   process(instruction_register_available, program_counter,
           program_counter_plus1, instruction_register)
     variable bp_opcode : opcode_t;
+    variable bp_rs : unsigned(4 downto 0);
     variable bp_funct : funct_t;
     variable bp_fmt : cop1_fmt_t;
     variable bp_imm : signed(15 downto 0);
     variable next_bp_predicted_branch : unsigned(29 downto 0);
+    variable next_bp_ras_push : std_logic;
+    variable next_bp_ras_push_addr : unsigned(31 downto 0);
+    variable next_bp_ras_pop : std_logic;
   begin
+    next_bp_ras_push := '0';
+    next_bp_ras_push_addr := (others => '-');
+    next_bp_ras_pop := '0';
     if instruction_register_available = '0' then
       next_bp_predicted_branch := program_counter;
     elsif TO_01(instruction_register, 'X')(0) = 'X' then
@@ -191,6 +208,7 @@ begin
     else
       bp_opcode := to_integer(instruction_register(31 downto 26));
       bp_funct := to_integer(instruction_register(5 downto 0));
+      bp_rs := instruction_register(25 downto 21);
       bp_fmt := to_integer(instruction_register(25 downto 21));
       bp_imm := signed(instruction_register(15 downto 0));
       if disable_branch_prediction then
@@ -200,6 +218,22 @@ begin
         next_bp_predicted_branch :=
           program_counter_plus1(29 downto 26) &
           instruction_register(25 downto 0);
+        if bp_opcode = OP_JAL then
+          next_bp_ras_push := '1';
+          next_bp_ras_push_addr := program_counter_plus1&"00";
+        end if;
+      elsif bp_opcode = OP_SPECIAL and
+            bp_funct = FUNCT_JR and
+            bp_rs = "11111" then
+        next_bp_predicted_branch :=
+          ra_stack(to_integer(bp_rasp))(31 downto 2);
+        next_bp_ras_pop := '1';
+      elsif bp_opcode = OP_SPECIAL and
+            bp_funct = FUNCT_JALR then
+        next_bp_predicted_branch :=
+          program_counter_plus1;
+        next_bp_ras_push := '1';
+        next_bp_ras_push_addr := program_counter_plus1&"00";
       elsif
           (bp_opcode = OP_BEQ or bp_opcode = OP_BNE or
            (bp_opcode = OP_COP1 and bp_fmt = COP1_FMT_BC)) and bp_imm < 0 then
@@ -213,7 +247,27 @@ begin
       end if;
     end if;
     instruction_predicted_branch <= next_bp_predicted_branch;
+    bp_ras_push <= next_bp_ras_push;
+    bp_ras_push_addr <= next_bp_ras_push_addr;
+    bp_ras_pop <= next_bp_ras_pop;
   end process branch_prediction;
+
+  branch_prediction_sequential : process(clk, rst)
+  begin
+    if rst = '1' then
+      ra_stack <= (others => (others => '0'));
+      bp_rasp <= (others => '0');
+    elsif rising_edge(clk) then
+      if refetch = '1' then
+        bp_rasp <= refetch_rasp;
+      elsif bp_ras_push = '1' then
+        ra_stack(to_integer(bp_rasp - 1)) <= bp_ras_push_addr;
+        bp_rasp <= bp_rasp - 1;
+      elsif bp_ras_pop = '1' then
+        bp_rasp <= bp_rasp + 1;
+      end if;
+    end if;
+  end process branch_prediction_sequential;
 
   instruction_fetch_sequential : process(clk, rst)
   begin
@@ -256,6 +310,7 @@ begin
         end if;
         instruction_register_available <= '1';
         instruction_fetch_stalled <= '0';
+        if_rasp <= bp_rasp;
       else
         instruction_fetch_stalled <= '1';
       end if;
@@ -327,6 +382,7 @@ begin
       decode_predicted_branch <= (others => '-');
       decode_program_counter_plus1 <= (others => '-');
       dispatch_decode_success <= '-';
+      dispatch_rasp <= (others => '-');
       decoded_instruction_available <= '0';
     elsif rising_edge(clk) then
       if refetch = '1' then
@@ -350,6 +406,7 @@ begin
         decode_predicted_branch <= (others => '-');
         decode_program_counter_plus1 <= (others => '-');
         dispatch_decode_success <= '-';
+        dispatch_rasp <= (others => '-');
         decoded_instruction_available <= '0';
       elsif instruction_register_available = '1' and decode_stall /= '1' then
         next_decode_rob_type := rob_type_calc; -- don't care
@@ -869,6 +926,7 @@ begin
         decode_predicted_branch <= instruction_predicted_branch & "00";
         decode_program_counter_plus1 <= program_counter_plus1;
         dispatch_decode_success <= next_dispatch_decode_success;
+        dispatch_rasp <= if_rasp;
         decoded_instruction_available <= next_decoded_instruction_available;
       elsif decode_stall /= '1' then
         decode_rob_type <= rob_type_calc; -- don't care
@@ -891,6 +949,7 @@ begin
         decode_predicted_branch <= (others => '-');
         decode_program_counter_plus1 <= (others => '-');
         dispatch_decode_success <= '-';
+        dispatch_rasp <= (others => '-');
         decoded_instruction_available <= '0';
       end if;
     end if;
@@ -936,6 +995,7 @@ begin
     dispatch_predicted_branch => decode_predicted_branch,
     dispatch_program_counter_plus1 => decode_program_counter_plus1,
     dispatch_decode_success => dispatch_decode_success,
+    dispatch_rasp => dispatch_rasp,
     rob_top_committable => rob_top_committable,
     rob_top => rob_top,
     rob_top_type => rob_top_type,
@@ -943,6 +1003,7 @@ begin
     rob_top_val => rob_top_val,
     refetch => refetch,
     refetch_address => refetch_address,
+    refetch_rasp => refetch_rasp,
     rob_bottom => rob_bottom,
     rob_rd0_reg_tag => dispatch_operand0_reg.tag,
     rob_rd0 => dispatch_operand0_rob,
