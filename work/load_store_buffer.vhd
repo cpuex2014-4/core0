@@ -60,26 +60,16 @@ architecture behavioral of load_store_buffer is
   signal stage2_entries_isstore : std_logic_vector(0 to num_stage2_entries-1);
   signal stage2_entries_operand0 : stage2_entries_word_t;
 
-  function compar_unsigned(a:unsigned; b:unsigned) return std_logic is
-  begin
-    if TO_01(a, 'X')(a'left) = 'X' or TO_01(b, 'X')(b'left) = 'X' then
-      return 'X';
-    elsif a = b then
-      return '1';
-    else
-      return '0';
-    end if;
-  end function compar_unsigned;
-  function compar_addr(a:unsigned_word; b:unsigned_word) return std_logic is
+  function iseq_unsigned(a:unsigned; b:unsigned) return std_logic is
   begin
     if TO_01(a, 'X')(0) = 'X' or TO_01(b, 'X')(0) = 'X' then
       return 'X';
     elsif a = b then
       return '1';
     else
-      return a(31) and b(31);
+      return '0';
     end if;
-  end function compar_addr;
+  end function iseq_unsigned;
 begin
   dispatchable <= not stage1_entries_busy(num_stage1_entries-1);
   sequential : process(clk, rst)
@@ -270,14 +260,16 @@ begin
         stage2_entries_issuable(i) :=
           stage2_entries_busy(i) and
           (not (stage2_entries_isstore(i) or
-                stage2_entries_operand0(i)(31)) or
+                iseq_unsigned(
+                  resize(stage2_entries_operand0(i)(31 downto 16), 16),
+                  x"FFFF")) or
            ((not stage2_entries_isstore(i) or
              rob_top_committable) and
-            compar_unsigned(stage2_entries_tag(i), rob_top)));
+            iseq_unsigned(stage2_entries_tag(i), rob_top)));
         for j in 0 to i-1 loop
           stage2_entries_issuable(i) :=
             stage2_entries_issuable(i) and
-            compar_addr(
+            not iseq_unsigned(
               stage2_entries_operand0(i),
               stage2_entries_operand0(j));
         end loop;
@@ -401,7 +393,7 @@ begin
         (stage2_entries_busy(i) and
          stage2_entries_isstore(i) and
          (rob_top_committable and
-          compar_unsigned(stage2_entries_tag(i), rob_top)));
+          iseq_unsigned(stage2_entries_tag(i), rob_top)));
     end loop;
     ls_committable <= next_ls_committable;
   end process combinational;
