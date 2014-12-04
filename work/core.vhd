@@ -102,6 +102,7 @@ architecture behavioral of core is
   signal wr0_tag : tomasulo_tag_t;
 
   signal none_dispatch : std_logic;
+  signal dispatch_common : std_logic;
   signal any_dispatch : std_logic;
 
   signal mem_dispatchable : std_logic := '0';
@@ -967,7 +968,10 @@ begin
   );
 
   none_dispatch <=
-    decoded_instruction_available when unit_id = unit_none else '0';
+    dispatch_common when unit_id = unit_none else '0';
+
+  dispatch_common <=
+    decoded_instruction_available and rob_dispatchable;
 
   any_dispatch <=
     none_dispatch or mem_dispatch or branch_dispatch or alu_dispatch
@@ -1010,9 +1014,7 @@ begin
     wr1_value => rob_top_val.value);
 
   mem_dispatch <=
-    mem_dispatchable when
-      decoded_instruction_available = '1' and unit_id = unit_mem
-    else '0';
+    dispatch_common and mem_dispatchable when unit_id = unit_mem else '0';
 
   ls_buffer_unit : load_store_buffer
   generic map (
@@ -1064,8 +1066,7 @@ begin
   mem_refetch <= refetch;
 
   branch_dispatch <=
-    branch_dispatchable when
-      decoded_instruction_available = '1' and unit_id = unit_branch
+    dispatch_common and branch_dispatchable when unit_id = unit_branch
     else '0';
   branch_available <= '1';
 
@@ -1129,9 +1130,7 @@ begin
   end process branch_process;
 
   alu_dispatch <=
-    alu_dispatchable when
-      decoded_instruction_available = '1' and unit_id = unit_alu
-    else '0';
+    dispatch_common and alu_dispatchable when unit_id = unit_alu else '0';
   alu_available <= '1';
 
   alu_reservation_station : reservation_station
@@ -1173,9 +1172,7 @@ begin
     alu_out => cdb_value(2));
 
   fadd_dispatch <=
-    fadd_dispatchable when
-      decoded_instruction_available = '1' and unit_id = unit_fadd
-    else '0';
+    dispatch_common and fadd_dispatchable when unit_id = unit_fadd else '0';
   fadd_available <= '1';
 
   fadd_reservation_station : reservation_station
@@ -1217,9 +1214,7 @@ begin
     fp_out => cdb_value(3));
 
   fmul_dispatch <=
-    fmul_dispatchable when
-      decoded_instruction_available = '1' and unit_id = unit_fmul
-    else '0';
+    dispatch_common and fmul_dispatchable when unit_id = unit_fmul else '0';
   fmul_available <= '1';
 
   fmul_reservation_station : reservation_station
@@ -1261,9 +1256,7 @@ begin
     fp_out => cdb_value(4));
 
   fcmp_dispatch <=
-    fcmp_dispatchable when
-      decoded_instruction_available = '1' and unit_id = unit_fcmp
-    else '0';
+    dispatch_common and fcmp_dispatchable when unit_id = unit_fcmp else '0';
   fcmp_available <= '1';
 
   fcmp_reservation_station : reservation_station
@@ -1305,8 +1298,7 @@ begin
     fp_out => cdb_value(5));
 
   fothers_dispatch <=
-    fothers_dispatchable when
-      decoded_instruction_available = '1' and unit_id = unit_fothers
+    dispatch_common and fothers_dispatchable when unit_id = unit_fothers
     else '0';
   fothers_available <= '1';
 

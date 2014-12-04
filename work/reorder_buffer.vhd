@@ -123,6 +123,9 @@ begin
           assert TO_01(dispatch_dest, 'X')(0) /= 'X'
             report "metavalue detected in dispatch_dest"
               severity failure;
+          assert rob_entries_busy(to_integer(rob_end)) = '0'
+            report "busy bit of ROB dispatchee is not 0"
+              severity failure;
           rob_entries_busy(to_integer(rob_end)) <= '1';
           rob_entries_type(to_integer(rob_end)) <= dispatch_type;
           rob_entries_dest(to_integer(rob_end)) <= dispatch_dest;
