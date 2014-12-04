@@ -149,7 +149,7 @@ begin
           snoop(stage1_entries_operand0(i),
             cdb_in_available, cdb_in_value, cdb_in_tag,
             debug_out,
-            "LSBufer Stage 1: " &
+            "LSBuffer Stage 1: " &
             "entry tag " & dec_of_unsigned(stage1_entries_tag(i)));
       end loop;
       if refetch = '1' then
@@ -197,7 +197,7 @@ begin
               snoop(dispatch_operand0,
                     cdb_in_available, cdb_in_value, cdb_in_tag,
                     debug_out,
-                    "LSBufer Stage 1: " &
+                    "LSBuffer Stage 1: " &
                     "dispatch: entry tag " &
                       dec_of_unsigned(dispatch_tag));
             stage1_entries_operand2(i) <= dispatch_operand2;
