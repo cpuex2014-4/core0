@@ -234,7 +234,7 @@ begin
     (others => 'X') when TO_01(instruction_source, 'X')(0) = 'X' else
     inst_data_0 when instruction_source = "00" else
     inst_data_1 when instruction_source = "01" else
-    (others => '0');
+    (others => '-');
 
   bypassing_program_loading : if bypass_program_loading generate
     foo: process
