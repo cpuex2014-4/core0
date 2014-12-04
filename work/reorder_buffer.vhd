@@ -41,7 +41,7 @@ entity reorder_buffer is
 end entity reorder_buffer;
 
 architecture behavioral of reorder_buffer is
-  constant num_entries : natural := 16;
+  constant num_entries : natural := 32;
 
   signal rob_start : tomasulo_tag_t := (others => '0');
   signal rob_end : tomasulo_tag_t := (others => '0');

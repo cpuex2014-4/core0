@@ -8,7 +8,7 @@ package kakeudon is
   subtype unsigned_word is unsigned(31 downto 0);
 
   subtype internal_register_t is unsigned(6 downto 0);
-  subtype tomasulo_tag_t is unsigned(3 downto 0);
+  subtype tomasulo_tag_t is unsigned(4 downto 0);
 
   constant cdb_size : natural := 7;
   subtype cdb_id_t is integer range 0 to cdb_size-1;
