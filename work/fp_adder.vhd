@@ -20,22 +20,14 @@ entity fp_adder is
 end entity fp_adder;
 
 architecture behavioral of fp_adder is
-  signal adder_in1 : std_logic_vector(31 downto 0);
-  signal adder_in2 : std_logic_vector(31 downto 0);
-  signal adder_out : std_logic_vector(31 downto 0);
+  signal adder_in1 : unsigned(31 downto 0);
+  signal adder_in2 : unsigned(31 downto 0);
+  signal adder_out : unsigned(31 downto 0);
   signal opcode_delay1 : unsigned(1 downto 0);
   signal fp_in0_neg_delay1 : unsigned(31 downto 0);
 begin
-  -- adder_in1 <= std_logic_vector(fp_in0);
-  -- adder_in2 <= std_logic_vector(
-  --              (fp_in1(31) xor opcode(0)) & fp_in1(30 downto 0));
-  adder_in1 <=
-    (others => '1') when TO_01(fp_in0, 'X')(0) = 'X' else
-    std_logic_vector(fp_in0);
-  adder_in2 <=
-    (others => '1') when TO_01(fp_in1, 'X')(0) = 'X' else
-    std_logic_vector(
-               (fp_in1(31) xor opcode(0)) & fp_in1(30 downto 0));
+  adder_in1 <= fp_in0;
+  adder_in2 <= (fp_in1(31) xor opcode(0)) & fp_in1(30 downto 0);
 
   sequential: process(clk, rst)
   begin
@@ -47,7 +39,7 @@ begin
       if TO_X01(opcode_delay1(1)) = 'X' then
         fp_out <= (others => 'X');
       elsif opcode_delay1(1) = '0' then
-        fp_out <= unsigned(adder_out);
+        fp_out <= adder_out;
       else
         fp_out <= fp_in0_neg_delay1;
       end if;

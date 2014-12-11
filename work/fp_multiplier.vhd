@@ -20,18 +20,12 @@ entity fp_multiplier is
 end entity fp_multiplier;
 
 architecture behavioral of fp_multiplier is
-  signal multiplier_in1 : std_logic_vector(31 downto 0);
-  signal multiplier_in2 : std_logic_vector(31 downto 0);
-  signal multiplier_out : std_logic_vector(31 downto 0);
+  signal multiplier_in1 : unsigned(31 downto 0);
+  signal multiplier_in2 : unsigned(31 downto 0);
+  signal multiplier_out : unsigned(31 downto 0);
 begin
-  -- multiplier_in1 <= std_logic_vector(fp_in0);
-  -- multiplier_in2 <= std_logic_vector(fp_in1);
-  multiplier_in1 <=
-    (others => '1') when TO_01(fp_in0, 'X')(0) = 'X' else
-    std_logic_vector(fp_in0);
-  multiplier_in2 <=
-    (others => '1') when TO_01(fp_in1, 'X')(0) = 'X' else
-    std_logic_vector(fp_in1);
+  multiplier_in1 <= fp_in0;
+  multiplier_in2 <= fp_in1;
 
   fmul_unit: FMUL
   port map (
@@ -44,7 +38,7 @@ begin
   sequential: process(clk, rst)
   begin
     if rising_edge(clk) then
-      fp_out <= unsigned(multiplier_out);
+      fp_out <= multiplier_out;
     end if;
   end process sequential;
 end architecture behavioral;
