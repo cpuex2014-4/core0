@@ -10,7 +10,7 @@ package kakeudon is
   subtype internal_register_t is unsigned(6 downto 0);
   subtype tomasulo_tag_t is unsigned(4 downto 0);
 
-  constant cdb_size : natural := 7;
+  constant cdb_size : natural := 6;
   subtype cdb_id_t is integer range 0 to cdb_size-1;
   subtype cdb_extended_id_t is integer range 0 to cdb_size;
 
@@ -54,6 +54,7 @@ package kakeudon is
       dispatchable : out std_logic := '1';
       unit_available : in std_logic;
       issue : out std_logic := '0';
+      issue_tag : out tomasulo_tag_t;
       issue_opcode : out unsigned(opcode_len-1 downto 0);
       issue_operands : out unsigned_word_array_t(0 to num_operands-1);
       broadcast_available : out std_logic;
@@ -269,14 +270,23 @@ package kakeudon is
 
   component alu is
     generic (
-      debug_out : boolean);
+      debug_out : boolean;
+      last_unit : boolean);
     port (
       clk : in std_logic;
       rst : in std_logic;
+      refetch : in std_logic;
+      alu_in_available : in std_logic;
+      alu_in_tag : in tomasulo_tag_t;
       alu_opcode : in unsigned(3 downto 0);
       alu_in0 : in unsigned(31 downto 0);
       alu_in1 : in unsigned(31 downto 0);
-      alu_out : out unsigned(31 downto 0));
+      alu_out_available : out std_logic;
+      alu_out_value : out unsigned(31 downto 0);
+      alu_out_tag : out tomasulo_tag_t;
+      cdb_writable : in std_logic;
+      cdb_writable_next : out std_logic;
+      alu_unit_available : out std_logic);
   end component alu;
 
   component fp_adder is

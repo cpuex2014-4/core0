@@ -27,6 +27,7 @@ entity reservation_station is
     dispatchable : out std_logic := '1';
     unit_available : in std_logic;
     issue : out std_logic := '0';
+    issue_tag : out tomasulo_tag_t;
     issue_opcode : out unsigned(opcode_len-1 downto 0);
     issue_operands : out unsigned_word_array_t(0 to num_operands-1);
     broadcast_available : out std_logic := '0';
@@ -202,7 +203,9 @@ begin
             entries_issuable(i) or entries_issuable_accum(i-1);
         end if;
       end loop;
-      entries_issuable_any := entries_issuable_accum(num_entries-1);
+      entries_issuable_any :=
+        unit_available and
+        entries_issuable_accum(num_entries-1);
       for i in num_entries-1 downto 0 loop
         if entries_issuable(i) = '1' then
           entries_issue_tag(i) := entries_tag(i);
@@ -232,9 +235,12 @@ begin
         issue_operands <= (others => (others => '-'));
         broadcast_available_queue(0) <= '0';
         broadcast_tag_queue(0) <= (others => '-');
+      elsif unit_available /= '1' then
+        -- stall
       else
         -- issue
         issue <= entries_issuable_any;
+        issue_tag <= entries_issue_tag(0);
         issue_opcode <= entries_issue_opcode(0);
         issue_operands <= entries_issue_operands(0);
         broadcast_available_queue(0) <= entries_issuable_any;

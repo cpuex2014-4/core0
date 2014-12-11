@@ -125,7 +125,7 @@ begin
   cpu_unit : cpu
   generic map (
     debug_out => false,
-    debug_out_commit => true,
+    debug_out_commit => false,
     bypass_io => bypass_io,
     bypass_program_loading => bypass_program_loading,
     rs_baudrate => test_baudrate,

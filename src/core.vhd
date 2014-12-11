@@ -119,6 +119,9 @@ architecture behavioral of core is
   signal mem_dispatch : std_logic := '0';
   signal mem_issue_operand0 : unsigned(31 downto 0);
   signal ls_committable : std_logic;
+  signal mem_data_available : std_logic;
+  signal mem_data_value : unsigned(31 downto 0);
+  signal mem_data_tag : tomasulo_tag_t;
 
   signal branch_dispatchable : std_logic;
   signal branch_dispatch : std_logic := '0';
@@ -131,8 +134,10 @@ architecture behavioral of core is
   signal alu_dispatch : std_logic := '0';
   signal alu_available : std_logic;
   signal alu_issue : std_logic;
+  signal alu_issue_tag : tomasulo_tag_t;
   signal alu_opcode : unsigned(3 downto 0);
   signal alu_operands : unsigned_word_array_t(0 to 1);
+  signal alu_cdb_writable : std_logic;
 
   signal fadd_dispatchable : std_logic;
   signal fadd_dispatch : std_logic := '0';
@@ -1127,15 +1132,21 @@ begin
   recv_data_from_memory: process(clk, rst)
   begin
     if rst = '1' then
-      cdb_available(0) <= '0';
-      cdb_value(0) <= (others => '-');
-      cdb_tag(0) <= (others => '-');
+      mem_data_available <= '0';
+      mem_data_value <= (others => '-');
+      mem_data_tag <= (others => '-');
     elsif rising_edge(clk) then
-      cdb_available(0) <= mem_avail_read and not refetch;
-      cdb_value(0) <= mem_data_read;
-      cdb_tag(0) <= mem_tag_read;
+      mem_data_available <= mem_avail_read and not refetch;
+      mem_data_value <= mem_data_read;
+      mem_data_tag <= mem_tag_read;
     end if;
   end process recv_data_from_memory;
+  cdb_available(0) <=
+    mem_data_available when mem_data_available = '1' else 'Z';
+  cdb_value(0) <=
+    mem_data_value when mem_data_available = '1' else (others => 'Z');
+  cdb_tag(0) <=
+    mem_data_tag when mem_data_available = '1' else (others => 'Z');
   mem_refetch <= refetch;
 
   branch_dispatch <=
@@ -1204,7 +1215,6 @@ begin
 
   alu_dispatch <=
     dispatch_common and alu_dispatchable when unit_id = unit_alu else '0';
-  alu_available <= '1';
 
   alu_reservation_station : reservation_station
   generic map (
@@ -1228,21 +1238,31 @@ begin
     dispatchable => alu_dispatchable,
     unit_available => alu_available,
     issue => alu_issue,
+    issue_tag => alu_issue_tag,
     issue_opcode => alu_opcode,
-    issue_operands => alu_operands,
-    broadcast_available => cdb_available(2),
-    broadcast_tag => cdb_tag(2));
+    issue_operands => alu_operands);
+
+  alu_cdb_writable <= not mem_data_available;
 
   alu_unit : alu
   generic map (
-    debug_out => debug_out)
+    debug_out => debug_out,
+    last_unit => true)
   port map (
     clk => clk,
     rst => rst,
+    refetch => refetch,
+    alu_in_available => alu_issue,
+    alu_in_tag => alu_issue_tag,
     alu_opcode => alu_opcode,
     alu_in0 => alu_operands(0),
     alu_in1 => alu_operands(1),
-    alu_out => cdb_value(2));
+    alu_out_available => cdb_available(0),
+    alu_out_value => cdb_value(0),
+    alu_out_tag => cdb_tag(0),
+    cdb_writable => alu_cdb_writable,
+    cdb_writable_next => open,
+    alu_unit_available => alu_available);
 
   fadd_dispatch <=
     dispatch_common and fadd_dispatchable when unit_id = unit_fadd else '0';
@@ -1272,8 +1292,8 @@ begin
     issue => fadd_issue,
     issue_opcode => fadd_opcode,
     issue_operands => fadd_operands,
-    broadcast_available => cdb_available(3),
-    broadcast_tag => cdb_tag(3));
+    broadcast_available => cdb_available(2),
+    broadcast_tag => cdb_tag(2));
 
   fadd_unit : fp_adder
   generic map (
@@ -1284,7 +1304,7 @@ begin
     opcode => fadd_opcode,
     fp_in0 => fadd_operands(0),
     fp_in1 => fadd_operands(1),
-    fp_out => cdb_value(3));
+    fp_out => cdb_value(2));
 
   fmul_dispatch <=
     dispatch_common and fmul_dispatchable when unit_id = unit_fmul else '0';
@@ -1314,8 +1334,8 @@ begin
     issue => fmul_issue,
     issue_opcode => fmul_opcode,
     issue_operands => fmul_operands,
-    broadcast_available => cdb_available(4),
-    broadcast_tag => cdb_tag(4));
+    broadcast_available => cdb_available(3),
+    broadcast_tag => cdb_tag(3));
 
   fmul_unit : fp_multiplier
   generic map (
@@ -1326,7 +1346,7 @@ begin
     opcode => fmul_opcode,
     fp_in0 => fmul_operands(0),
     fp_in1 => fmul_operands(1),
-    fp_out => cdb_value(4));
+    fp_out => cdb_value(3));
 
   fcmp_dispatch <=
     dispatch_common and fcmp_dispatchable when unit_id = unit_fcmp else '0';
@@ -1356,8 +1376,8 @@ begin
     issue => fcmp_issue,
     issue_opcode => fcmp_opcode,
     issue_operands => fcmp_operands,
-    broadcast_available => cdb_available(5),
-    broadcast_tag => cdb_tag(5));
+    broadcast_available => cdb_available(4),
+    broadcast_tag => cdb_tag(4));
 
   fcmp_unit : fp_comparator
   generic map (
@@ -1368,7 +1388,7 @@ begin
     opcode => fcmp_opcode,
     fp_in0 => fcmp_operands(0),
     fp_in1 => fcmp_operands(1),
-    fp_out => cdb_value(5));
+    fp_out => cdb_value(4));
 
   fothers_dispatch <=
     dispatch_common and fothers_dispatchable when unit_id = unit_fothers
@@ -1399,8 +1419,8 @@ begin
     issue => fothers_issue,
     issue_opcode => fothers_opcode,
     issue_operands => fothers_operands,
-    broadcast_available => cdb_available(6),
-    broadcast_tag => cdb_tag(6));
+    broadcast_available => cdb_available(5),
+    broadcast_tag => cdb_tag(5));
 
   fothers_unit : fp_others
   generic map (
@@ -1411,7 +1431,7 @@ begin
     opcode => fothers_opcode,
     fp_in0 => fothers_operands(0),
     fp_in1 => fothers_operands(1),
-    fp_out => cdb_value(6));
+    fp_out => cdb_value(5));
 
   calc_commit <=
     rob_top_committable when rob_top_type = rob_type_calc else '0';
