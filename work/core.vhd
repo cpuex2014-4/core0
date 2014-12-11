@@ -1092,8 +1092,8 @@ begin
   ls_buffer_unit : load_store_buffer
   generic map (
     debug_out => debug_out,
-    num_stage1_entries => 2,
-    num_stage2_entries => 2)
+    num_stage1_entries => 3,
+    num_stage2_entries => 3)
   port map (
     clk => clk,
     rst => rst,
