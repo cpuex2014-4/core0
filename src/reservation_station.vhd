@@ -327,7 +327,7 @@ begin
                         dec_of_unsigned(dispatch_tag) &
                       ": operand" & integer'image(opid));
             end loop;
-          elsif entries_issuable_accum(i) = '1' then
+          elsif unit_available = '1' and entries_issuable_accum(i) = '1' then
             if i = num_entries-1 then
               entries_busy(i) <= '0';
               entries_tag(i) <= (others => '-');
