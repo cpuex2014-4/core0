@@ -127,8 +127,10 @@ architecture behavioral of core is
   signal branch_dispatch : std_logic := '0';
   signal branch_available : std_logic;
   signal branch_issue : std_logic;
+  signal branch_issue_tag : tomasulo_tag_t;
   signal branch_opcode : unsigned(1 downto 0);
   signal branch_operands : unsigned_word_array_t(0 to 3);
+  signal branch_cdb_writable : std_logic;
 
   signal alu_dispatchable : std_logic;
   signal alu_dispatch : std_logic := '0';
@@ -1152,7 +1154,6 @@ begin
   branch_dispatch <=
     dispatch_common and branch_dispatchable when unit_id = unit_branch
     else '0';
-  branch_available <= '1';
 
   branch_reservation_station : reservation_station
   generic map (
@@ -1176,42 +1177,33 @@ begin
     dispatchable => branch_dispatchable,
     unit_available => branch_available,
     issue => branch_issue,
+    issue_tag => branch_issue_tag,
     issue_opcode => branch_opcode,
-    issue_operands => branch_operands,
-    broadcast_available => cdb_available(1),
-    broadcast_tag => cdb_tag(1));
+    issue_operands => branch_operands);
 
-  branch_process : process(clk, rst)
-    variable compar_result : std_logic;
-    variable branch_result : unsigned(31 downto 0);
-  begin
-    if rst = '1' then
-    elsif rising_edge(clk) then
-      assert TO_X01(branch_issue) /= 'X'
-        report "metavalue detected in branch_issue"
-          severity failure;
-      branch_result := (others => '-');
-      if branch_issue = '1' then
-        assert TO_01(branch_operands(0), 'X')(0) /= 'X'
-          report "metavalue detected in branch_operands(0)"
-            severity failure;
-        assert TO_01(branch_operands(1), 'X')(0) /= 'X'
-          report "metavalue detected in branch_operands(1)"
-            severity failure;
-        if branch_operands(0) = branch_operands(1) then
-          compar_result := '1';
-        else
-          compar_result := '0';
-        end if;
-        if (compar_result xor branch_opcode(0)) = '1' then
-          branch_result := branch_operands(3);
-        else
-          branch_result := branch_operands(2);
-        end if;
-      end if;
-      cdb_value(1) <= branch_result;
-    end if;
-  end process branch_process;
+  branch_cdb_writable <= not mem_data_available;
+
+  brancher_unit : brancher
+  generic map (
+    debug_out => debug_out,
+    last_unit => false)
+  port map (
+    clk => clk,
+    rst => rst,
+    refetch => refetch,
+    brancher_in_available => branch_issue,
+    brancher_in_tag => branch_issue_tag,
+    brancher_opcode => branch_opcode,
+    brancher_in0 => branch_operands(0),
+    brancher_in1 => branch_operands(1),
+    brancher_in2 => branch_operands(2),
+    brancher_in3 => branch_operands(3),
+    brancher_out_available => cdb_available(0),
+    brancher_out_value => cdb_value(0),
+    brancher_out_tag => cdb_tag(0),
+    cdb_writable => branch_cdb_writable,
+    cdb_writable_next => alu_cdb_writable,
+    brancher_unit_available => branch_available);
 
   alu_dispatch <=
     dispatch_common and alu_dispatchable when unit_id = unit_alu else '0';
@@ -1241,8 +1233,6 @@ begin
     issue_tag => alu_issue_tag,
     issue_opcode => alu_opcode,
     issue_operands => alu_operands);
-
-  alu_cdb_writable <= not mem_data_available;
 
   alu_unit : alu
   generic map (
@@ -1292,8 +1282,8 @@ begin
     issue => fadd_issue,
     issue_opcode => fadd_opcode,
     issue_operands => fadd_operands,
-    broadcast_available => cdb_available(2),
-    broadcast_tag => cdb_tag(2));
+    broadcast_available => cdb_available(1),
+    broadcast_tag => cdb_tag(1));
 
   fadd_unit : fp_adder
   generic map (
@@ -1304,7 +1294,7 @@ begin
     opcode => fadd_opcode,
     fp_in0 => fadd_operands(0),
     fp_in1 => fadd_operands(1),
-    fp_out => cdb_value(2));
+    fp_out => cdb_value(1));
 
   fmul_dispatch <=
     dispatch_common and fmul_dispatchable when unit_id = unit_fmul else '0';
@@ -1334,8 +1324,8 @@ begin
     issue => fmul_issue,
     issue_opcode => fmul_opcode,
     issue_operands => fmul_operands,
-    broadcast_available => cdb_available(3),
-    broadcast_tag => cdb_tag(3));
+    broadcast_available => cdb_available(2),
+    broadcast_tag => cdb_tag(2));
 
   fmul_unit : fp_multiplier
   generic map (
@@ -1346,7 +1336,7 @@ begin
     opcode => fmul_opcode,
     fp_in0 => fmul_operands(0),
     fp_in1 => fmul_operands(1),
-    fp_out => cdb_value(3));
+    fp_out => cdb_value(2));
 
   fcmp_dispatch <=
     dispatch_common and fcmp_dispatchable when unit_id = unit_fcmp else '0';
@@ -1376,8 +1366,8 @@ begin
     issue => fcmp_issue,
     issue_opcode => fcmp_opcode,
     issue_operands => fcmp_operands,
-    broadcast_available => cdb_available(4),
-    broadcast_tag => cdb_tag(4));
+    broadcast_available => cdb_available(3),
+    broadcast_tag => cdb_tag(3));
 
   fcmp_unit : fp_comparator
   generic map (
@@ -1388,7 +1378,7 @@ begin
     opcode => fcmp_opcode,
     fp_in0 => fcmp_operands(0),
     fp_in1 => fcmp_operands(1),
-    fp_out => cdb_value(4));
+    fp_out => cdb_value(3));
 
   fothers_dispatch <=
     dispatch_common and fothers_dispatchable when unit_id = unit_fothers
@@ -1419,8 +1409,8 @@ begin
     issue => fothers_issue,
     issue_opcode => fothers_opcode,
     issue_operands => fothers_operands,
-    broadcast_available => cdb_available(5),
-    broadcast_tag => cdb_tag(5));
+    broadcast_available => cdb_available(4),
+    broadcast_tag => cdb_tag(4));
 
   fothers_unit : fp_others
   generic map (
@@ -1431,7 +1421,7 @@ begin
     opcode => fothers_opcode,
     fp_in0 => fothers_operands(0),
     fp_in1 => fothers_operands(1),
-    fp_out => cdb_value(5));
+    fp_out => cdb_value(4));
 
   calc_commit <=
     rob_top_committable when rob_top_type = rob_type_calc else '0';
