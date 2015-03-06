@@ -10,7 +10,7 @@ package kakeudon is
   subtype internal_register_t is unsigned(6 downto 0);
   subtype tomasulo_tag_t is unsigned(4 downto 0);
 
-  constant cdb_size : natural := 5;
+  constant cdb_size : natural := 4;
   subtype cdb_id_t is integer range 0 to cdb_size-1;
   subtype cdb_extended_id_t is integer range 0 to cdb_size;
 

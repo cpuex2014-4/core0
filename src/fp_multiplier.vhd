@@ -27,7 +27,7 @@ begin
   multiplier_in1 <= fp_in0;
   multiplier_in2 <= fp_in1;
 
-  fmul_unit: FMUL
+  fmul_unit: FMUL_OLD
   port map (
     input1 => multiplier_in1,
     input2 => multiplier_in2,

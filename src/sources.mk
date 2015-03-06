@@ -7,5 +7,6 @@ SOURCES = \
 	sramsim.vhd cpu_tb.vhd \
 	../fpu/VHDL/fadd.vhd ../fpu/VHDL/fdiv.vhd ../fpu/VHDL/finv.vhd \
 	../fpu/VHDL/fmul_stage1.vhd ../fpu/VHDL/fmul_stage2.vhd \
+	../fpu/VHDL/fmul_old.vhd \
 	../fpu/VHDL/fmul.vhd ../fpu/VHDL/fsqrt.vhd ../fpu/VHDL/ftoi.vhd \
 	../fpu/VHDL/itof.vhd ../fpu/VHDL/kakeudon_fpu.vhd

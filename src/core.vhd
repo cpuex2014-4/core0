@@ -4,7 +4,7 @@ use ieee.numeric_std.all;
 
 library work;
 use work.serial.all;
--- use work.kakeudon_fpu.all;
+use work.kakeudon_fpu.all;
 use work.kakeudon.all;
 
 entity core is
@@ -152,8 +152,10 @@ architecture behavioral of core is
   signal fmul_dispatch : std_logic := '0';
   signal fmul_available : std_logic;
   signal fmul_issue : std_logic;
+  signal fmul_issue_tag : tomasulo_tag_t;
   signal fmul_opcode : unsigned(1 downto 0);
   signal fmul_operands : unsigned_word_array_t(0 to 1);
+  signal fmul_cdb_writable : std_logic;
 
   signal fothers_dispatchable : std_logic;
   signal fothers_dispatch : std_logic := '0';
@@ -1237,7 +1239,7 @@ begin
   alu_unit : alu
   generic map (
     debug_out => debug_out,
-    last_unit => true)
+    last_unit => false)
   port map (
     clk => clk,
     rst => rst,
@@ -1251,7 +1253,7 @@ begin
     alu_out_value => cdb_value(0),
     alu_out_tag => cdb_tag(0),
     cdb_writable => alu_cdb_writable,
-    cdb_writable_next => open,
+    cdb_writable_next => fmul_cdb_writable,
     alu_unit_available => alu_available);
 
   fadd_dispatch <=
@@ -1322,21 +1324,26 @@ begin
     dispatchable => fmul_dispatchable,
     unit_available => fmul_available,
     issue => fmul_issue,
+    issue_tag => fmul_issue_tag,
     issue_opcode => fmul_opcode,
-    issue_operands => fmul_operands,
-    broadcast_available => cdb_available(2),
-    broadcast_tag => cdb_tag(2));
+    issue_operands => fmul_operands);
 
-  fmul_unit : fp_multiplier
+  fmul_unit : fmul
   generic map (
-    debug_out => debug_out)
+    last_unit => true)
   port map (
     clk => clk,
-    rst => rst,
-    opcode => fmul_opcode,
-    fp_in0 => fmul_operands(0),
-    fp_in1 => fmul_operands(1),
-    fp_out => cdb_value(2));
+    refetch => refetch,
+    fmul_in_available => fmul_issue,
+    fmul_in_tag => fmul_issue_tag,
+    fmul_in0 => fmul_operands(0),
+    fmul_in1 => fmul_operands(1),
+    fmul_out_available => cdb_available(0),
+    fmul_out_value => cdb_value(0),
+    fmul_out_tag => cdb_tag(0),
+    cdb_writable => fmul_cdb_writable,
+    cdb_writable_next => open,
+    fmul_unit_available => fmul_available);
 
   fcmp_dispatch <=
     dispatch_common and fcmp_dispatchable when unit_id = unit_fcmp else '0';
@@ -1366,8 +1373,8 @@ begin
     issue => fcmp_issue,
     issue_opcode => fcmp_opcode,
     issue_operands => fcmp_operands,
-    broadcast_available => cdb_available(3),
-    broadcast_tag => cdb_tag(3));
+    broadcast_available => cdb_available(2),
+    broadcast_tag => cdb_tag(2));
 
   fcmp_unit : fp_comparator
   generic map (
@@ -1378,7 +1385,7 @@ begin
     opcode => fcmp_opcode,
     fp_in0 => fcmp_operands(0),
     fp_in1 => fcmp_operands(1),
-    fp_out => cdb_value(3));
+    fp_out => cdb_value(2));
 
   fothers_dispatch <=
     dispatch_common and fothers_dispatchable when unit_id = unit_fothers
@@ -1409,8 +1416,8 @@ begin
     issue => fothers_issue,
     issue_opcode => fothers_opcode,
     issue_operands => fothers_operands,
-    broadcast_available => cdb_available(4),
-    broadcast_tag => cdb_tag(4));
+    broadcast_available => cdb_available(3),
+    broadcast_tag => cdb_tag(3));
 
   fothers_unit : fp_others
   generic map (
@@ -1421,7 +1428,7 @@ begin
     opcode => fothers_opcode,
     fp_in0 => fothers_operands(0),
     fp_in1 => fothers_operands(1),
-    fp_out => cdb_value(4));
+    fp_out => cdb_value(3));
 
   calc_commit <=
     rob_top_committable when rob_top_type = rob_type_calc else '0';
